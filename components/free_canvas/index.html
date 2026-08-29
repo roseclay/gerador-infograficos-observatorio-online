@@ -1,0 +1,1150 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: "Segoe UI", Arial, sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      overflow: hidden;
+      background: transparent;
+      color: #0f172a;
+      user-select: none;
+    }
+
+    .shell {
+      width: 100%;
+      padding: 8px 0 20px;
+    }
+
+    .shell:focus {
+      outline: none;
+    }
+
+    .toolbar {
+      align-items: center;
+      color: #475569;
+      display: flex;
+      font-size: 13px;
+      gap: 8px;
+      justify-content: space-between;
+      margin: 0 0 10px;
+      min-height: 28px;
+    }
+
+    .badge {
+      background: #eef4ff;
+      border: 1px solid #c8dcff;
+      border-radius: 8px;
+      color: #12356f;
+      font-weight: 600;
+      padding: 5px 9px;
+    }
+
+    .hint {
+      max-width: 360px;
+      text-align: right;
+    }
+
+    .workspace {
+      align-items: start;
+      display: grid;
+      gap: 14px;
+      grid-template-columns: minmax(340px, 1fr) minmax(280px, 380px);
+      width: 100%;
+    }
+
+    .stage-scroll {
+      background: #f4f6f8;
+      border: 1px solid #d8e0ea;
+      border-radius: 8px;
+      max-height: 78vh;
+      overscroll-behavior: contain;
+      overflow: auto;
+      padding: 12px;
+    }
+
+    .stage {
+      background: #fff;
+      box-shadow: 0 10px 28px rgba(15, 23, 42, 0.14);
+      margin: 0 auto;
+      position: relative;
+      touch-action: none;
+      user-select: none;
+    }
+
+    .stage img {
+      display: block;
+      height: auto;
+      pointer-events: none;
+      width: 100%;
+    }
+
+    .field {
+      align-items: center;
+      border: 1px solid rgba(0, 87, 184, 0.38);
+      border-radius: 8px;
+      color: #0057b8;
+      cursor: grab;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      min-height: 14px;
+      min-width: 18px;
+      overflow: hidden;
+      padding: 2px 6px;
+      position: absolute;
+      text-shadow: 0 1px 0 rgba(255, 255, 255, 0.75);
+      will-change: left, top, width, height;
+    }
+
+    .field:hover,
+    .field.selected {
+      background: rgba(0, 87, 184, 0.08);
+      border-color: rgba(0, 87, 184, 0.86);
+      outline: 2px solid rgba(0, 87, 184, 0.12);
+    }
+
+    .field.dragging {
+      cursor: grabbing;
+      outline: 2px solid rgba(0, 87, 184, 0.28);
+      z-index: 10;
+    }
+
+    .stage.accurate .field {
+      background: rgba(255, 255, 255, 0.02);
+      border-color: rgba(0, 87, 184, 0.52);
+      text-shadow: none;
+    }
+
+    .field.has-render {
+      padding: 0;
+    }
+
+    .field.has-render .field-value,
+    .field.has-render .field-name {
+      inset: 0;
+      pointer-events: none;
+      position: absolute;
+      visibility: hidden;
+    }
+
+    .field-render {
+      display: block;
+      height: 100%;
+      object-fit: fill;
+      pointer-events: none;
+      width: 100%;
+    }
+
+    .field-value {
+      line-height: 1.05;
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .field-name {
+      font-size: 0.42em;
+      font-weight: 400;
+      line-height: 1.1;
+      margin-top: 2px;
+      max-width: 100%;
+      opacity: 0.9;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .handle {
+      background: #0057b8;
+      border: 2px solid #fff;
+      border-radius: 8px 0 8px 0;
+      bottom: -1px;
+      cursor: nwse-resize;
+      height: 15px;
+      position: absolute;
+      right: -1px;
+      width: 15px;
+    }
+
+    .field-panel {
+      background: #0f172a;
+      border: 1px solid #263244;
+      border-radius: 8px;
+      color: #dbeafe;
+      max-height: 78vh;
+      overflow: auto;
+    }
+
+    .panel-header {
+      align-items: center;
+      background: #0f172a;
+      border-bottom: 1px solid #263244;
+      display: flex;
+      gap: 8px;
+      justify-content: space-between;
+      padding: 10px 12px;
+      position: sticky;
+      top: 0;
+      z-index: 2;
+    }
+
+    .panel-title {
+      color: #f8fafc;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .panel-count {
+      color: #93c5fd;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .field-table {
+      border-collapse: collapse;
+      font-size: 12px;
+      table-layout: fixed;
+      width: 100%;
+    }
+
+    .field-table th {
+      background: #111827;
+      border-bottom: 1px solid #263244;
+      color: #b7c8e7;
+      font-weight: 600;
+      padding: 8px 9px;
+      text-align: left;
+    }
+
+    .field-table th.action-col {
+      text-align: center;
+      width: 58px;
+    }
+
+    .field-table td {
+      border-bottom: 1px solid #263244;
+      color: #e5eefc;
+      padding: 8px 9px;
+      vertical-align: middle;
+    }
+
+    .field-row {
+      cursor: grab;
+      touch-action: none;
+    }
+
+    .field-row:hover,
+    .field-row.selected {
+      background: rgba(0, 87, 184, 0.18);
+    }
+
+    .field-row.pending .status {
+      background: #fef3c7;
+      color: #7c2d12;
+    }
+
+    .field-row.placed .status {
+      background: #dbeafe;
+      color: #12356f;
+    }
+
+    .field-row.disabled {
+      cursor: default;
+      opacity: 0.52;
+    }
+
+    .cell-main,
+    .cell-value {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .cell-main {
+      color: #f8fafc;
+      font-weight: 650;
+    }
+
+    .cell-value {
+      color: #dbeafe;
+      font-weight: 600;
+    }
+
+    .coord {
+      color: #bfdbfe;
+      font-variant-numeric: tabular-nums;
+      text-align: right;
+    }
+
+    .status {
+      border-radius: 999px;
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 3px 7px;
+      white-space: nowrap;
+    }
+
+    .remove-button {
+      align-items: center;
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 6px;
+      color: #dbeafe;
+      cursor: pointer;
+      display: inline-flex;
+      font-size: 16px;
+      font-weight: 700;
+      height: 28px;
+      justify-content: center;
+      line-height: 1;
+      width: 28px;
+    }
+
+    .remove-button:hover:not(:disabled) {
+      background: #fee2e2;
+      border-color: #fca5a5;
+      color: #7f1d1d;
+    }
+
+    .remove-button:disabled {
+      cursor: default;
+      opacity: 0.36;
+    }
+
+    .drop-ghost {
+      background: #eaf2ff;
+      border: 1px solid #83b4ff;
+      border-radius: 8px;
+      box-shadow: 0 12px 30px rgba(15, 23, 42, 0.22);
+      color: #12356f;
+      font-size: 13px;
+      font-weight: 700;
+      left: 0;
+      max-width: 260px;
+      overflow: hidden;
+      padding: 8px 10px;
+      pointer-events: none;
+      position: fixed;
+      text-overflow: ellipsis;
+      top: 0;
+      transform: translate(-50%, -50%);
+      white-space: nowrap;
+      z-index: 1000;
+    }
+
+    .empty {
+      background: #f8fafc;
+      border: 1px dashed #cbd5e1;
+      border-radius: 8px;
+      color: #475569;
+      padding: 32px;
+      text-align: center;
+    }
+
+    @media (max-width: 900px) {
+      .workspace {
+        grid-template-columns: 1fr;
+      }
+
+      .hint {
+        display: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="root" class="shell"></div>
+  <script>
+    const root = document.getElementById("root");
+    let args = {};
+    let fields = [];
+    let selectedId = "";
+    let scale = 1;
+    let interaction = null;
+    let stageElement = null;
+    let stageImageElement = null;
+    let panelElement = null;
+    let scrollMemory = { left: 0, top: 0 };
+    let pendingLocalValue = null;
+    let pendingLocalRenders = 0;
+    let currentImageSrc = "";
+    let keyboardSyncTimer = null;
+
+    root.setAttribute("tabindex", "0");
+
+    function send(type, data) {
+      window.parent.postMessage({ isStreamlitMessage: true, type, ...data }, "*");
+    }
+
+    function ready() {
+      send("streamlit:componentReady", { apiVersion: 1 });
+    }
+
+    function setFrameHeight() {
+      const height = Math.ceil(document.documentElement.scrollHeight || document.body.scrollHeight || 400);
+      send("streamlit:setFrameHeight", { height });
+    }
+
+    function componentValue(changed) {
+      return {
+        changed,
+        selected_id: selectedId,
+        fields: fields.map((field) => ({
+          id: String(field.id || ""),
+          placed: Boolean(field.placed),
+          x: Math.round(Number(field.x || 0)),
+          y: Math.round(Number(field.y || 0)),
+          width: Math.round(Number(field.width || 0)),
+          height: Math.round(Number(field.height || 0)),
+          font_size: Math.round(Number(field.font_size || 0)),
+        })),
+      };
+    }
+
+    function setComponentValue(changed) {
+      const value = componentValue(changed);
+      if (changed) {
+        pendingLocalValue = value;
+        pendingLocalRenders = 4;
+      }
+      send("streamlit:setComponentValue", { value, dataType: "json" });
+    }
+
+    function scheduleComponentValue() {
+      if (keyboardSyncTimer) {
+        clearTimeout(keyboardSyncTimer);
+      }
+      keyboardSyncTimer = setTimeout(() => {
+        keyboardSyncTimer = null;
+        setComponentValue(true);
+      }, 140);
+    }
+
+    function clamp(value, min, max) {
+      return Math.max(min, Math.min(max, value));
+    }
+
+    function number(value, fallback) {
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : fallback;
+    }
+
+    function bool(value, fallback) {
+      if (value === undefined || value === null || value === "") {
+        return fallback;
+      }
+      if (typeof value === "boolean") {
+        return value;
+      }
+      const text = String(value).trim().toLowerCase();
+      if (["1", "true", "sim", "yes", "s"].includes(text)) {
+        return true;
+      }
+      if (["0", "false", "nao", "não", "no", "n"].includes(text)) {
+        return false;
+      }
+      return fallback;
+    }
+
+    function normalizedField(field, index) {
+      return {
+        enabled: field.enabled !== false,
+        placed: bool(field.placed, false),
+        id: String(field.id || `campo_${index + 1}`),
+        name: String(field.name || ""),
+        value: String(field.value || ""),
+        x: number(field.x, 0),
+        y: number(field.y, 0),
+        width: Math.max(24, number(field.width, 180)),
+        height: Math.max(18, number(field.height, 60)),
+        font_size: Math.max(8, number(field.font_size, 36)),
+        color: String(field.color || "#0057B8"),
+        bold: field.bold !== false,
+        align: ["left", "center", "right"].includes(String(field.align || "")) ? String(field.align) : "left",
+        render_label: Boolean(field.render_label),
+        order: number(field.order, index + 1),
+        preview_pending: Boolean(field.preview_pending),
+      };
+    }
+
+    function updateScale(stage, imageWidth) {
+      const rect = stage.getBoundingClientRect();
+      scale = rect.width / Math.max(1, imageWidth);
+    }
+
+    function fieldById(id) {
+      return fields.find((field) => field.id === id);
+    }
+
+    function placedFields() {
+      return fields.filter((field) => field.enabled && field.placed);
+    }
+
+    function selectedLabel() {
+      const selected = fields.find((field) => field.id === selectedId);
+      if (selected) {
+        const state = selected.placed ? `X ${Math.round(selected.x)} · Y ${Math.round(selected.y)}` : "pendente";
+        return `${selected.name || selected.id}: ${state}`;
+      }
+      return `${placedFields().length}/${fields.filter((field) => field.enabled).length} campos na arte`;
+    }
+
+    function updateBadge() {
+      const badge = document.querySelector(".badge");
+      if (badge) {
+        badge.textContent = selectedLabel();
+      }
+    }
+
+    function removeFieldFromCanvas(id) {
+      const field = fieldById(id);
+      if (!field) {
+        return;
+      }
+      field.placed = false;
+      selectField(id);
+      updateFieldElement(field);
+      updatePanelRows();
+      updateBadge();
+      setComponentValue(true);
+    }
+
+    function applyFieldStyle(element, field) {
+      element.style.left = `${field.x * scale}px`;
+      element.style.top = `${field.y * scale}px`;
+      element.style.width = `${field.width * scale}px`;
+      element.style.height = `${field.height * scale}px`;
+      element.style.color = field.color;
+      element.style.fontSize = `${Math.max(8, field.font_size * scale)}px`;
+      element.style.fontWeight = field.bold ? "700" : "400";
+      element.style.textAlign = field.align;
+    }
+
+    function fieldPreviewSrc(field) {
+      const previews = args.fieldPreviews || {};
+      return previews[String(field.id || "")] || "";
+    }
+
+    function updateFieldElement(field) {
+      let element = document.querySelector(`.field[data-id="${CSS.escape(field.id)}"]`);
+      if (!field.enabled || !field.placed) {
+        if (element) {
+          element.remove();
+        }
+        return;
+      }
+      if (!element && stageElement) {
+        renderField(stageElement, field);
+        element = document.querySelector(`.field[data-id="${CSS.escape(field.id)}"]`);
+      }
+      if (!element) {
+        return;
+      }
+      applyFieldStyle(element, field);
+      const previewSrc = fieldPreviewSrc(field);
+      element.classList.toggle("has-render", Boolean(previewSrc));
+      let rendered = element.querySelector(".field-render");
+      if (previewSrc && !rendered) {
+        rendered = document.createElement("img");
+        rendered.className = "field-render";
+        rendered.alt = "";
+        element.insertBefore(rendered, element.firstChild);
+      }
+      if (rendered && previewSrc && rendered.getAttribute("src") !== previewSrc) {
+        rendered.setAttribute("src", previewSrc);
+      }
+      if (rendered && !previewSrc) {
+        rendered.remove();
+      }
+      element.classList.toggle("selected", field.id === selectedId);
+      element.classList.toggle("pending-sync", Boolean(field.preview_pending));
+      const value = element.querySelector(".field-value");
+      if (value) {
+        value.textContent = field.value || field.name || field.id;
+        value.style.textAlign = field.align;
+      }
+      const name = element.querySelector(".field-name");
+      if (name) {
+        name.textContent = field.name;
+        name.style.textAlign = field.align;
+      }
+    }
+
+    function updatePanelRows() {
+      if (!panelElement) {
+        return;
+      }
+      panelElement.querySelectorAll(".field-row").forEach((row) => {
+        const field = fieldById(row.dataset.id || "");
+        if (!field) {
+          return;
+        }
+        row.classList.toggle("selected", field.id === selectedId);
+        row.classList.toggle("placed", Boolean(field.placed));
+        row.classList.toggle("pending", !field.placed);
+        row.classList.toggle("disabled", !field.enabled);
+        const xCell = row.querySelector(".coord-x");
+        const yCell = row.querySelector(".coord-y");
+        const status = row.querySelector(".status");
+        if (xCell) {
+          xCell.textContent = field.placed ? Math.round(field.x) : "-";
+        }
+        if (yCell) {
+          yCell.textContent = field.placed ? Math.round(field.y) : "-";
+        }
+        if (status) {
+          status.textContent = field.placed ? "na arte" : "pendente";
+        }
+        const removeButton = row.querySelector(".remove-button");
+        if (removeButton) {
+          removeButton.disabled = !field.placed;
+          removeButton.title = field.placed ? "Remover da arte" : "Campo ainda não está na arte";
+        }
+      });
+    }
+
+    function renderField(stage, field) {
+      if (!field.enabled || !field.placed) {
+        return;
+      }
+      const box = document.createElement("div");
+      box.className = "field" + (field.id === selectedId ? " selected" : "");
+      if (field.preview_pending) {
+        box.classList.add("pending-sync");
+      }
+      box.dataset.id = field.id;
+      applyFieldStyle(box, field);
+
+      const previewSrc = fieldPreviewSrc(field);
+      if (previewSrc) {
+        box.classList.add("has-render");
+        const rendered = document.createElement("img");
+        rendered.className = "field-render";
+        rendered.alt = "";
+        rendered.src = previewSrc;
+        box.appendChild(rendered);
+      }
+
+      const value = document.createElement("div");
+      value.className = "field-value";
+      value.textContent = field.value || field.name || field.id;
+      value.style.width = "100%";
+      value.style.textAlign = field.align;
+      box.appendChild(value);
+
+      if (field.render_label && field.name) {
+        const name = document.createElement("div");
+        name.className = "field-name";
+        name.textContent = field.name;
+        name.style.width = "100%";
+        name.style.textAlign = field.align;
+        box.appendChild(name);
+      }
+
+      const handle = document.createElement("div");
+      handle.className = "handle";
+      handle.title = "Redimensionar";
+      box.appendChild(handle);
+
+      box.addEventListener("pointerdown", (event) => startPlacedPointer(event, field.id, "move"));
+      handle.addEventListener("pointerdown", (event) => startPlacedPointer(event, field.id, "resize"));
+      stage.appendChild(box);
+    }
+
+    function createPanelRow(field) {
+      const row = document.createElement("tr");
+      row.className = "field-row " + (field.placed ? "placed" : "pending") + (field.id === selectedId ? " selected" : "") + (!field.enabled ? " disabled" : "");
+      row.dataset.id = field.id;
+      row.title = field.enabled ? "Arrastar para a imagem-base" : "Campo desativado";
+
+      const name = document.createElement("td");
+      name.innerHTML = `<div class="cell-main"></div>`;
+      name.querySelector(".cell-main").textContent = field.name || field.id;
+      row.appendChild(name);
+
+      const value = document.createElement("td");
+      value.innerHTML = `<div class="cell-value"></div>`;
+      value.querySelector(".cell-value").textContent = field.value || "";
+      row.appendChild(value);
+
+      const x = document.createElement("td");
+      x.className = "coord coord-x";
+      x.textContent = field.placed ? Math.round(field.x) : "-";
+      row.appendChild(x);
+
+      const y = document.createElement("td");
+      y.className = "coord coord-y";
+      y.textContent = field.placed ? Math.round(field.y) : "-";
+      row.appendChild(y);
+
+      const statusCell = document.createElement("td");
+      const status = document.createElement("span");
+      status.className = "status";
+      status.textContent = field.placed ? "na arte" : "pendente";
+      statusCell.appendChild(status);
+      row.appendChild(statusCell);
+
+      const actionCell = document.createElement("td");
+      actionCell.style.textAlign = "center";
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "remove-button";
+      remove.textContent = "×";
+      remove.disabled = !field.placed;
+      remove.title = field.placed ? "Remover da arte" : "Campo ainda não está na arte";
+      remove.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+      });
+      remove.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        removeFieldFromCanvas(field.id);
+      });
+      actionCell.appendChild(remove);
+      row.appendChild(actionCell);
+
+      row.addEventListener("pointerdown", (event) => startPalettePointer(event, field.id));
+      return row;
+    }
+
+    function renderFieldPanel(panel) {
+      panel.innerHTML = "";
+
+      const header = document.createElement("div");
+      header.className = "panel-header";
+      const title = document.createElement("div");
+      title.className = "panel-title";
+      title.textContent = "Campos do CSV";
+      const count = document.createElement("div");
+      count.className = "panel-count";
+      count.textContent = `${placedFields().length}/${fields.length}`;
+      header.appendChild(title);
+      header.appendChild(count);
+      panel.appendChild(header);
+
+      if (!fields.length) {
+        const empty = document.createElement("div");
+        empty.className = "empty";
+        empty.textContent = "Nenhum campo carregado.";
+        panel.appendChild(empty);
+        return;
+      }
+
+      const table = document.createElement("table");
+      table.className = "field-table";
+      const head = document.createElement("thead");
+      head.innerHTML = "<tr><th>Campo</th><th>Valor/texto</th><th>X</th><th>Y</th><th>Status</th><th class=\"action-col\">Remover</th></tr>";
+      table.appendChild(head);
+      const body = document.createElement("tbody");
+      fields.forEach((field) => body.appendChild(createPanelRow(field)));
+      table.appendChild(body);
+      panel.appendChild(table);
+    }
+
+    function selectField(id) {
+      selectedId = id;
+      root.focus({ preventScroll: true });
+      document.querySelectorAll(".field").forEach((element) => {
+        element.classList.toggle("selected", element.dataset.id === id);
+      });
+      updatePanelRows();
+      updateBadge();
+    }
+
+    function startPlacedPointer(event, id, mode) {
+      event.preventDefault();
+      event.stopPropagation();
+      const field = fieldById(id);
+      if (!field) {
+        return;
+      }
+      selectField(id);
+      interaction = {
+        type: "placed",
+        id,
+        mode,
+        pointerId: event.pointerId,
+        startX: event.clientX,
+        startY: event.clientY,
+        originalX: field.x,
+        originalY: field.y,
+        originalW: field.width,
+        originalH: field.height,
+        originalFontSize: field.font_size,
+      };
+      const element = document.querySelector(`.field[data-id="${CSS.escape(id)}"]`);
+      if (element) {
+        element.classList.add("dragging", "selected");
+        element.setPointerCapture(event.pointerId);
+      }
+    }
+
+    function moveGhost(event) {
+      if (interaction && interaction.ghost) {
+        interaction.ghost.style.transform = `translate(${event.clientX}px, ${event.clientY}px) translate(-50%, -50%)`;
+      }
+    }
+
+    function startPalettePointer(event, id) {
+      const field = fieldById(id);
+      if (!field || !field.enabled) {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      selectField(id);
+      const ghost = document.createElement("div");
+      ghost.className = "drop-ghost";
+      ghost.textContent = `${field.name || field.id}: ${field.value || ""}`;
+      document.body.appendChild(ghost);
+      interaction = {
+        type: "palette",
+        id,
+        pointerId: event.pointerId,
+        ghost,
+      };
+      event.currentTarget.setPointerCapture(event.pointerId);
+      moveGhost(event);
+    }
+
+    function dropPoint(event, field) {
+      if (!stageElement) {
+        return null;
+      }
+      const rect = stageElement.getBoundingClientRect();
+      if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) {
+        return null;
+      }
+      const imageWidth = Math.max(1, Number(args.imageWidth || 1));
+      const imageHeight = Math.max(1, Number(args.imageHeight || 1));
+      const x = (event.clientX - rect.left) / Math.max(0.01, scale) - field.width / 2;
+      const y = (event.clientY - rect.top) / Math.max(0.01, scale) - field.height / 2;
+      return {
+        x: clamp(x, 0, imageWidth - field.width),
+        y: clamp(y, 0, imageHeight - field.height),
+      };
+    }
+
+    function finishPaletteDrop(event) {
+      const field = fieldById(interaction.id);
+      const point = field ? dropPoint(event, field) : null;
+      if (interaction.ghost) {
+        interaction.ghost.remove();
+      }
+      interaction = null;
+      if (!field || !point) {
+        updateBadge();
+        updatePanelRows();
+        return;
+      }
+      field.placed = true;
+      field.x = point.x;
+      field.y = point.y;
+      selectField(field.id);
+      updateFieldElement(field);
+      updatePanelRows();
+      updateBadge();
+      setComponentValue(true);
+    }
+
+    function onPointerMove(event) {
+      if (!interaction) {
+        return;
+      }
+      if (interaction.type === "palette") {
+        moveGhost(event);
+        return;
+      }
+      const imageWidth = Math.max(1, Number(args.imageWidth || 1));
+      const imageHeight = Math.max(1, Number(args.imageHeight || 1));
+      const field = fieldById(interaction.id);
+      if (!field) {
+        return;
+      }
+      const dx = (event.clientX - interaction.startX) / Math.max(0.01, scale);
+      const dy = (event.clientY - interaction.startY) / Math.max(0.01, scale);
+      if (interaction.mode === "resize") {
+        field.width = clamp(interaction.originalW + dx, 24, imageWidth - field.x);
+        field.height = clamp(interaction.originalH + dy, 18, imageHeight - field.y);
+        const widthRatio = field.width / Math.max(1, interaction.originalW);
+        const heightRatio = field.height / Math.max(1, interaction.originalH);
+        const sizeRatio = Math.max(0.35, Math.max(widthRatio, heightRatio));
+        field.font_size = clamp(Math.round(interaction.originalFontSize * sizeRatio), 8, 220);
+      } else {
+        field.x = clamp(interaction.originalX + dx, 0, imageWidth - field.width);
+        field.y = clamp(interaction.originalY + dy, 0, imageHeight - field.height);
+      }
+      updateFieldElement(field);
+      updatePanelRows();
+      updateBadge();
+    }
+
+    function onPointerUp(event) {
+      if (!interaction) {
+        return;
+      }
+      if (interaction.type === "palette") {
+        finishPaletteDrop(event);
+        return;
+      }
+      interaction = null;
+      document.querySelectorAll(".field.dragging").forEach((element) => {
+        element.classList.remove("dragging");
+      });
+      fields.forEach(updateFieldElement);
+      updatePanelRows();
+      updateBadge();
+      setComponentValue(true);
+    }
+
+    function onKeyDown(event) {
+      if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Delete", "Backspace"].includes(event.key)) {
+        return;
+      }
+      const field = fieldById(selectedId);
+      if (!field || !field.enabled) {
+        return;
+      }
+      if ((event.key === "Delete" || event.key === "Backspace") && field.placed) {
+        event.preventDefault();
+        removeFieldFromCanvas(field.id);
+        return;
+      }
+      if (!field.placed || !event.key.startsWith("Arrow")) {
+        return;
+      }
+      event.preventDefault();
+      const imageWidth = Math.max(1, Number(args.imageWidth || 1));
+      const imageHeight = Math.max(1, Number(args.imageHeight || 1));
+      const step = event.shiftKey ? 10 : 1;
+      const dx = event.key === "ArrowLeft" ? -step : event.key === "ArrowRight" ? step : 0;
+      const dy = event.key === "ArrowUp" ? -step : event.key === "ArrowDown" ? step : 0;
+      field.x = clamp(field.x + dx, 0, imageWidth - field.width);
+      field.y = clamp(field.y + dy, 0, imageHeight - field.height);
+      selectField(field.id);
+      updateFieldElement(field);
+      updatePanelRows();
+      updateBadge();
+      scheduleComponentValue();
+    }
+
+    function mergePendingLocalFields(incomingFields) {
+      if (!pendingLocalValue || !Array.isArray(pendingLocalValue.fields)) {
+        return incomingFields;
+      }
+      const localById = new Map(pendingLocalValue.fields.map((field) => [String(field.id || ""), field]));
+      const incomingAlreadySynced = incomingFields.every((field) => {
+        const local = localById.get(String(field.id || ""));
+        if (!local) {
+          return true;
+        }
+        return Boolean(field.placed) === Boolean(local.placed)
+          && Math.round(Number(field.x || 0)) === Math.round(Number(local.x || 0))
+          && Math.round(Number(field.y || 0)) === Math.round(Number(local.y || 0))
+          && Math.round(Number(field.width || 0)) === Math.round(Number(local.width || 0))
+          && Math.round(Number(field.height || 0)) === Math.round(Number(local.height || 0))
+          && Math.round(Number(field.font_size || 0)) === Math.round(Number(local.font_size || 0));
+      });
+      if (incomingAlreadySynced) {
+        pendingLocalValue = null;
+        pendingLocalRenders = 0;
+        return incomingFields;
+      }
+      const mergedFields = incomingFields.map((field) => {
+        const local = localById.get(String(field.id || ""));
+        if (!local) {
+          return field;
+        }
+        return {
+          ...field,
+          placed: Boolean(local.placed),
+          x: number(local.x, field.x),
+          y: number(local.y, field.y),
+          width: number(local.width, field.width),
+          height: number(local.height, field.height),
+          font_size: Math.max(8, number(local.font_size, field.font_size)),
+          preview_pending: true,
+        };
+      });
+      pendingLocalRenders -= 1;
+      if (pendingLocalRenders <= 0) {
+        pendingLocalValue = null;
+      }
+      return mergedFields;
+    }
+
+    function updatePreviewImage(nextSrc) {
+      if (!stageImageElement || !nextSrc || nextSrc === currentImageSrc) {
+        return;
+      }
+      const preloaded = new Image();
+      preloaded.addEventListener("load", () => {
+        currentImageSrc = nextSrc;
+        stageImageElement.src = nextSrc;
+        if (stageElement) {
+          updateScale(stageElement, Math.max(1, Number(args.imageWidth || 1)));
+          fields.forEach(updateFieldElement);
+        }
+      });
+      preloaded.src = nextSrc;
+    }
+
+    function syncStageFromArgs() {
+      if (!args.image || !stageElement || !stageImageElement || !panelElement) {
+        draw(false);
+        return;
+      }
+      const imageWidth = Math.max(1, Number(args.imageWidth || 1));
+      const imageHeight = Math.max(1, Number(args.imageHeight || 1));
+      const scroll = document.querySelector(".stage-scroll");
+      stageElement.className = "stage" + (args.faithfulPreview ? " accurate" : "");
+      const maxWidth = Math.min(imageWidth, Math.max(320, root.clientWidth - 430));
+      stageElement.style.width = `${maxWidth}px`;
+      stageElement.style.aspectRatio = `${imageWidth} / ${imageHeight}`;
+      updateScale(stageElement, imageWidth);
+
+      const visibleIds = new Set(fields.filter((field) => field.enabled && field.placed).map((field) => field.id));
+      stageElement.querySelectorAll(".field").forEach((element) => {
+        if (!visibleIds.has(element.dataset.id || "")) {
+          element.remove();
+        }
+      });
+      fields.forEach(updateFieldElement);
+      renderFieldPanel(panelElement);
+      updateBadge();
+      if (scroll) {
+        scroll.scrollLeft = scrollMemory.left;
+        scroll.scrollTop = scrollMemory.top;
+      }
+      updatePreviewImage(args.image);
+      setFrameHeight();
+    }
+
+    function draw(announce) {
+      const imageWidth = Math.max(1, Number(args.imageWidth || 1));
+      const imageHeight = Math.max(1, Number(args.imageHeight || 1));
+      const previousScroll = document.querySelector(".stage-scroll");
+      if (previousScroll) {
+        scrollMemory = { left: previousScroll.scrollLeft, top: previousScroll.scrollTop };
+      }
+
+      root.innerHTML = "";
+      stageElement = null;
+      stageImageElement = null;
+      panelElement = null;
+
+      const toolbar = document.createElement("div");
+      toolbar.className = "toolbar";
+      const badge = document.createElement("div");
+      badge.className = "badge";
+      badge.textContent = selectedLabel();
+      const hint = document.createElement("div");
+      hint.className = "hint";
+      hint.textContent = "Arraste uma linha da tabela para a arte. Use o canto azul para redimensionar.";
+      toolbar.appendChild(badge);
+      toolbar.appendChild(hint);
+      root.appendChild(toolbar);
+
+      if (!args.image) {
+        const empty = document.createElement("div");
+        empty.className = "empty";
+        empty.textContent = "Carregue uma imagem-base para posicionar campos.";
+        root.appendChild(empty);
+        setFrameHeight();
+        return;
+      }
+
+      const workspace = document.createElement("div");
+      workspace.className = "workspace";
+
+      const scroll = document.createElement("div");
+      scroll.className = "stage-scroll";
+      scroll.addEventListener("scroll", () => {
+        scrollMemory = { left: scroll.scrollLeft, top: scroll.scrollTop };
+      });
+      const stage = document.createElement("div");
+      stage.className = "stage" + (args.faithfulPreview ? " accurate" : "");
+      stageElement = stage;
+      const maxWidth = Math.min(imageWidth, Math.max(320, root.clientWidth - 430));
+      stage.style.width = `${maxWidth}px`;
+      stage.style.aspectRatio = `${imageWidth} / ${imageHeight}`;
+      const image = document.createElement("img");
+      image.alt = "Imagem-base";
+      stageImageElement = image;
+      image.addEventListener("load", () => {
+        currentImageSrc = image.currentSrc || image.src;
+        updateScale(stage, imageWidth);
+        if (stage.dataset.ready !== "true") {
+          stage.dataset.ready = "true";
+          stage.querySelectorAll(".field").forEach((element) => element.remove());
+        }
+        fields.forEach(updateFieldElement);
+        scroll.scrollLeft = scrollMemory.left;
+        scroll.scrollTop = scrollMemory.top;
+        setFrameHeight();
+        if (announce) {
+          setComponentValue(false);
+        }
+      });
+      image.src = args.image;
+      stage.appendChild(image);
+      scroll.appendChild(stage);
+
+      const panel = document.createElement("div");
+      panel.className = "field-panel";
+      panelElement = panel;
+      renderFieldPanel(panel);
+
+      workspace.appendChild(scroll);
+      workspace.appendChild(panel);
+      root.appendChild(workspace);
+      setFrameHeight();
+    }
+
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp);
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("blur", () => {
+      if (keyboardSyncTimer) {
+        clearTimeout(keyboardSyncTimer);
+        keyboardSyncTimer = null;
+        setComponentValue(true);
+      }
+    });
+    window.addEventListener("resize", () => syncStageFromArgs());
+
+    window.addEventListener("message", (event) => {
+      if (!event.data || event.data.type !== "streamlit:render") {
+        return;
+      }
+      args = event.data.args || {};
+      fields = mergePendingLocalFields((args.fields || []).map(normalizedField)).sort((a, b) => a.order - b.order);
+      if (!fields.some((field) => field.id === selectedId)) {
+        selectedId = fields[0] ? fields[0].id : "";
+      }
+      if (stageElement || panelElement) {
+        syncStageFromArgs();
+      } else {
+        draw(false);
+      }
+    });
+
+    ready();
+    setFrameHeight();
+  </script>
+</body>
+</html>

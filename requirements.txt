@@ -1,0 +1,5 @@
+pandas
+Pillow
+PyYAML
+pytest
+streamlit

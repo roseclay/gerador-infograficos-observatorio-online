@@ -1,0 +1,35 @@
+id: institucional_claro_v1
+name: Institucional claro
+description: Design institucional claro com distribuição 4 + 2 + 3.
+version: "1.0"
+status: Disponível
+
+thumbnail: assets/templates/institucional_claro_v1/thumbnail.png
+reference: assets/references/institucional_claro_v1_referencia.png
+production_base: assets/templates/institucional_claro_v1/base_9_indicadores.png
+
+canvas:
+  width: 1122
+  height: 1402
+  aspect_ratio: 0.8003
+
+capacity:
+  per_page: 9
+
+sections:
+  principal:
+    capacity: 4
+    layout: 2x2
+  intermediate:
+    capacity: 2
+    layout: 2x1
+  complementary:
+    capacity: 3
+    layout: 3x1
+
+customization:
+  section_titles: true
+  icons: true
+  text_colors: limited
+  fixed_background: true
+  call_to_action: optional

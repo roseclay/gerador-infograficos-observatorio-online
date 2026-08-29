@@ -1,0 +1,310 @@
+version: 1
+defaults:
+  section: Indicadores
+  icon: circle
+  color: "#0057B8"
+  confidence_minimum: 60
+  high_confidence: 85
+sections:
+  - name: Indicadores principais
+    order: 1
+    show_title: true
+  - name: Alcance
+    order: 2
+    show_title: true
+  - name: Indicadores complementares
+    order: 3
+    show_title: true
+rules:
+  people_research:
+    terms:
+      - pesquisador
+      - pesquisadores
+      - docente
+      - docentes
+      - bolsista
+    synonyms:
+      - pesquisadora
+      - pesquisadoras
+      - cientista
+      - cientistas
+    negative_terms:
+      - municipio
+      - cidade
+    category: pessoas/pesquisa
+    section: Indicadores principais
+    icon: people
+    color: "#0057B8"
+    priority: 100
+    confidence_minimum: 72
+    preferred_label: Pesquisadores
+    compatible_operations:
+      - direct_value
+      - count
+      - distinct_count
+  research_group:
+    terms:
+      - grupo
+      - grupos
+      - rede
+      - redes
+      - colaboracao
+      - colaboração
+    synonyms:
+      - conexao
+      - conexão
+      - nucleo
+      - núcleo
+    category: rede
+    section: Indicadores principais
+    icon: network
+    color: "#0057B8"
+    priority: 96
+    confidence_minimum: 70
+    preferred_label: Grupos de pesquisa
+    compatible_operations:
+      - direct_value
+      - count
+      - distinct_count
+  graduate_program:
+    terms:
+      - pos graduacao
+      - pós-graduação
+      - mestrado
+      - doutorado
+      - programa
+      - programas
+    synonyms:
+      - curso
+      - cursos
+      - formacao
+      - formação
+    negative_terms:
+      - tem doutorado
+      - doutor
+      - doutora
+    category: educação
+    section: Indicadores principais
+    icon: graduation
+    color: "#0057B8"
+    priority: 94
+    confidence_minimum: 68
+    preferred_label: Programas de pós-graduação
+    compatible_operations:
+      - direct_value
+      - count
+      - distinct_count
+  doctorate_profile:
+    terms:
+      - tem doutorado
+      - doutorado
+      - doutor
+      - doutora
+      - titulação
+      - titulacao
+    synonyms:
+      - diploma
+      - formacao doutoral
+    category: educação
+    section: Indicadores complementares
+    icon: medal
+    color: "#0057B8"
+    priority: 98
+    confidence_minimum: 68
+    preferred_label: Têm doutorado
+    compatible_operations:
+      - direct_value
+      - percentage
+      - count
+  institution:
+    terms:
+      - instituicao
+      - instituição
+      - universidade
+      - instituto
+      - escola
+      - ensino
+    synonyms:
+      - unidade
+      - campus
+      - faculdade
+    category: instituições
+    section: Indicadores principais
+    icon: institution
+    color: "#0057B8"
+    priority: 92
+    confidence_minimum: 68
+    preferred_label: Instituições de ensino e pesquisa
+    compatible_operations:
+      - direct_value
+      - distinct_count
+      - count
+  location:
+    terms:
+      - municipio
+      - município
+      - cidade
+      - territorio
+      - território
+      - regiao
+      - região
+    synonyms:
+      - localidade
+      - localizacao
+      - localização
+    category: localização
+    section: Alcance
+    icon: pin
+    color: "#0057B8"
+    priority: 90
+    confidence_minimum: 66
+    preferred_label: Municípios com pesquisadores atuando
+    compatible_operations:
+      - direct_value
+      - distinct_count
+      - count
+  scientific_output:
+    terms:
+      - producao cientifica
+      - produção científica
+      - publicacao
+      - publicação
+      - artigo
+      - capitulo
+      - capítulo
+      - livro
+    synonyms:
+      - producoes cientificas
+      - produções científicas
+      - bibliografica
+      - bibliográfica
+    category: produção científica
+    section: Alcance
+    icon: globe
+    color: "#0057B8"
+    priority: 88
+    confidence_minimum: 66
+    preferred_label: Produções científicas registradas
+    compatible_operations:
+      - direct_value
+      - sum
+      - count
+  technical_output:
+    terms:
+      - producao tecnica
+      - produção técnica
+      - relatorio tecnico
+      - relatório técnico
+      - software
+      - programa de computador
+      - sistema
+      - patente
+      - patentes
+    synonyms:
+      - produto tecnico
+      - produto técnico
+      - tecnologia
+    category: documento técnico
+    section: Indicadores complementares
+    icon: code
+    color: "#0057B8"
+    priority: 86
+    confidence_minimum: 65
+    preferred_label: Produções técnicas
+    compatible_operations:
+      - direct_value
+      - sum
+      - count
+  grant_productivity:
+    terms:
+      - bolsa
+      - bolsas
+      - produtividade
+      - premiacao
+      - premiação
+      - premio
+      - prêmio
+    synonyms:
+      - reconhecimento
+      - pesquisador premiado
+    category: premiação/pesquisador
+    section: Indicadores complementares
+    icon: award
+    color: "#0057B8"
+    priority: 84
+    confidence_minimum: 64
+    preferred_label: Com bolsa de produtividade
+    compatible_operations:
+      - direct_value
+      - count
+      - percentage
+  patent:
+    terms:
+      - patente
+      - deposito de patente
+      - depósito de patente
+      - propriedade intelectual
+    synonyms:
+      - certificado
+      - carta patente
+    category: propriedade intelectual
+    section: Indicadores complementares
+    icon: patent
+    color: "#0057B8"
+    priority: 76
+    confidence_minimum: 62
+    compatible_operations:
+      - direct_value
+      - count
+      - sum
+  brand:
+    terms:
+      - marca
+      - marcas
+    synonyms:
+      - registro de marca
+    category: propriedade intelectual
+    section: Indicadores complementares
+    icon: tag
+    color: "#0057B8"
+    priority: 70
+    confidence_minimum: 62
+    compatible_operations:
+      - direct_value
+      - count
+  cultivar:
+    terms:
+      - cultivar
+      - cultivares
+      - planta
+      - plantas
+    synonyms:
+      - variedade vegetal
+    category: natureza
+    section: Indicadores complementares
+    icon: leaf
+    color: "#0057B8"
+    priority: 68
+    confidence_minimum: 62
+    compatible_operations:
+      - direct_value
+      - count
+  laboratory:
+    terms:
+      - laboratorio
+      - laboratório
+      - laboratorios
+      - laboratórios
+    synonyms:
+      - lab
+      - pesquisa experimental
+    category: pesquisa
+    section: Indicadores principais
+    icon: flask
+    color: "#0057B8"
+    priority: 66
+    confidence_minimum: 62
+    compatible_operations:
+      - direct_value
+      - count
+      - distinct_count

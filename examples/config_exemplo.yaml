@@ -1,0 +1,160 @@
+schema_version: 2
+csv:
+  path: examples/dados_exemplo.csv
+  separator: ;
+  encoding: utf-8-sig
+  has_header: false
+csv_schema:
+  columns:
+    - indicador
+    - valor
+  signature: 5adcb43b8db823a9
+metadata:
+  header: OBSERVATÓRIO DE CIÊNCIA, TECNOLOGIA E INOVAÇÃO DA BAHIA
+  title: A ciência baiana em números
+  subtitle: Um retrato do que a Bahia produz em conhecimento, pesquisa e inovação.
+  period: ''
+  source: Dados fictícios de demonstração
+  updated_at: 25/08/2026
+  cta: Explore os dados
+  website: ''
+template:
+  id: institucional_claro_v1
+  version: "1.0"
+sections:
+  - name: Indicadores principais
+    order: 1
+    show_title: true
+  - name: Alcance
+    order: 2
+    show_title: true
+  - name: Indicadores complementares
+    order: 3
+    show_title: true
+indicators:
+  - enabled: true
+    id: pesquisadores
+    label: Pesquisadores
+    section: Indicadores principais
+    column: valor
+    operation: direct_value
+    filter_column: indicador
+    filter_value: Pesquisadores
+    prefix: ''
+    suffix: ''
+    decimals: 0
+    order: 1
+    icon: users
+    color: '#0057B8'
+  - enabled: true
+    id: grupos_pesquisa
+    label: Grupos de pesquisa
+    section: Indicadores principais
+    column: valor
+    operation: direct_value
+    filter_column: indicador
+    filter_value: Grupos de pesquisa
+    prefix: ''
+    suffix: ''
+    decimals: 0
+    order: 2
+    icon: network
+    color: '#0057B8'
+  - enabled: true
+    id: programas_pos
+    label: Programas de pós-graduação
+    section: Indicadores principais
+    column: valor
+    operation: direct_value
+    filter_column: indicador
+    filter_value: Programas de pós-graduação
+    prefix: ''
+    suffix: ''
+    decimals: 0
+    order: 3
+    icon: graduation
+    color: '#0057B8'
+  - enabled: true
+    id: instituicoes
+    label: Instituições de ensino e pesquisa
+    section: Indicadores principais
+    column: valor
+    operation: direct_value
+    filter_column: indicador
+    filter_value: Instituições de Ensino e Pesquisa
+    prefix: ''
+    suffix: ''
+    decimals: 0
+    order: 4
+    icon: institution
+    color: '#0057B8'
+  - enabled: true
+    id: producoes_cientificas
+    label: Produções científicas registradas
+    section: Alcance
+    column: valor
+    operation: direct_value
+    filter_column: indicador
+    filter_value: Produções Científicas Registradas
+    prefix: ''
+    suffix: ''
+    decimals: 0
+    order: 5
+    icon: globe
+    color: '#0057B8'
+  - enabled: true
+    id: municipios
+    label: Municípios com pesquisadores atuando
+    section: Alcance
+    column: valor
+    operation: direct_value
+    filter_column: indicador
+    filter_value: Municípios com pesquisadores atuando
+    prefix: ''
+    suffix: ''
+    decimals: 0
+    order: 6
+    icon: pin
+    color: '#0057B8'
+  - enabled: true
+    id: doutorado
+    label: Têm doutorado
+    section: Indicadores complementares
+    column: valor
+    operation: direct_value
+    filter_column: indicador
+    filter_value: tem doutorado
+    prefix: ''
+    suffix: ''
+    decimals: 0
+    order: 7
+    icon: ribbon
+    color: '#0057B8'
+  - enabled: true
+    id: bolsa_produtividade
+    label: Com bolsa de produtividade
+    section: Indicadores complementares
+    column: valor
+    operation: direct_value
+    filter_column: indicador
+    filter_value: com bolsa produtividade
+    prefix: ''
+    suffix: ''
+    decimals: 0
+    order: 8
+    icon: award_user
+    color: '#0057B8'
+  - enabled: true
+    id: producoes_tecnicas
+    label: Produções técnicas (patentes, softwares)
+    section: Indicadores complementares
+    column: valor
+    operation: direct_value
+    filter_column: indicador
+    filter_value: produções técnicas (patentes, softwares...)
+    prefix: ''
+    suffix: ''
+    decimals: 0
+    order: 9
+    icon: document
+    color: '#0057B8'
