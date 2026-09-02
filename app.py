@@ -4,6 +4,7 @@ import base64
 from copy import deepcopy
 from datetime import date
 from io import BytesIO
+import os
 from pathlib import Path
 import hashlib
 
@@ -29,7 +30,21 @@ from src.configuration import (
     sections_from_indicators,
     update_schema,
 )
+from src.archive_store import LocalArchiveStore
+from src.supabase_archive_store import (
+    DEFAULT_SUPABASE_BUCKET,
+    SupabaseArchiveConfig,
+    SupabaseArchiveError,
+    SupabaseArchiveStore,
+    sign_in_supabase_user,
+)
 from src.data_loader import load_csv, save_used_data
+from src.data_binding import (
+    fields_from_dataset_observations,
+    make_chart_element,
+    make_dimension_chart_element,
+    rows_as_indicator_observations,
+)
 from src.free_canvas_component import drag_canvas
 from src.free_mode import (
     ALIGN_OPTIONS,
@@ -77,6 +92,7 @@ from src.validation import validate_metric_configs, validate_required_metadata
 ROOT = Path(__file__).parent
 EXAMPLES_DIR = ROOT / "examples"
 OUTPUT_DIR = ROOT / "output"
+ARCHIVE_DIR = ROOT / "storage" / "acervo"
 
 SEPARATOR_OPTIONS = ["Automático", "Ponto e vírgula (;)", "Vírgula (,)", "Tabulação", "Barra vertical (|)"]
 ENCODING_OPTIONS = ["Automática", "utf-8-sig", "utf-8", "cp1252", "latin1"]
@@ -156,6 +172,13 @@ def init_state() -> None:
     st.session_state.setdefault("free_field_csv_name", "")
     st.session_state.setdefault("free_field_csv_warnings", [])
     st.session_state.setdefault("free_editor_nonce", 0)
+    st.session_state.setdefault("archive_infographic_id", "")
+    st.session_state.setdefault("archive_revision_id", "")
+    st.session_state.setdefault("archive_base_image_id", "")
+    st.session_state.setdefault("archive_base_image_version_id", "")
+    st.session_state.setdefault("archive_dataset_id", "")
+    st.session_state.setdefault("archive_dataset_version_id", "")
+    st.session_state.setdefault("team_access_ok", False)
 
 
 def set_csv_bytes(data: bytes, name: str, demo_mode: bool = False, config: dict | None = None) -> None:
@@ -778,6 +801,12 @@ def clear_free_mode() -> None:
     st.session_state.free_field_csv_digest = ""
     st.session_state.free_field_csv_name = ""
     st.session_state.free_field_csv_warnings = []
+    st.session_state.archive_infographic_id = ""
+    st.session_state.archive_revision_id = ""
+    st.session_state.archive_base_image_id = ""
+    st.session_state.archive_base_image_version_id = ""
+    st.session_state.archive_dataset_id = ""
+    st.session_state.archive_dataset_version_id = ""
     reset_free_editor_state()
 
 
@@ -787,6 +816,8 @@ def load_reference_base_as_free_mode() -> None:
         st.error("Imagem-base de exemplo não encontrada.")
         return
     set_free_base_image(base_path.read_bytes(), base_path.name)
+    st.session_state.archive_base_image_id = ""
+    st.session_state.archive_base_image_version_id = ""
 
 
 def set_free_fields_from_csv(data: bytes, name: str) -> None:
@@ -834,7 +865,335 @@ def free_field_csv_bytes(fields: list[dict], base_image_name: str) -> bytes:
 
 def free_config_bytes(base_image_name: str, fields: list[dict], image_size: tuple[int, int], project_name: str = "") -> bytes:
     config = build_free_mode_config_with_name(base_image_name, fields, image_size, project_name)
+    if st.session_state.get("archive_base_image_id"):
+        config["base_image"]["id"] = st.session_state.archive_base_image_id
+        config["base_image"]["version_id"] = st.session_state.archive_base_image_version_id
     return yaml.safe_dump(config, allow_unicode=True, sort_keys=False).encode("utf-8")
+
+
+def secret_value(section: str, key: str, env_name: str = "", default: str = "") -> str:
+    env_key = env_name or key.upper()
+    value = os.environ.get(env_key)
+    if value:
+        return value
+    try:
+        section_values = st.secrets.get(section, {})
+        if hasattr(section_values, "get"):
+            value = section_values.get(key)
+            if value:
+                return str(value)
+        value = st.secrets.get(key)
+        if value:
+            return str(value)
+    except Exception:
+        pass
+    return default
+
+
+def archive_backend_settings() -> dict[str, str]:
+    provider = secret_value("archive", "provider", "ARCHIVE_PROVIDER", "local").strip().lower()
+    team_password = secret_value("access", "password", "APP_PASSWORD")
+    url = secret_value("supabase", "url", "SUPABASE_URL")
+    anon_key = secret_value("supabase", "anon_key", "SUPABASE_ANON_KEY")
+    service_role_key = secret_value("supabase", "service_role_key", "SUPABASE_SERVICE_ROLE_KEY")
+    bucket = secret_value("supabase", "bucket", "SUPABASE_BUCKET", DEFAULT_SUPABASE_BUCKET)
+    if provider == "local" and url and (anon_key or service_role_key):
+        provider = "supabase"
+    return {
+        "provider": "supabase" if provider == "supabase" else "local",
+        "url": url,
+        "anon_key": anon_key,
+        "service_role_key": service_role_key,
+        "bucket": bucket,
+        "team_password": team_password,
+    }
+
+
+def render_archive_access_gate(settings: dict[str, str]) -> None:
+    team_password = settings.get("team_password") or ""
+    if team_password and not st.session_state.get("team_access_ok"):
+        st.info("Digite a senha da equipe para acessar o acervo.")
+        with st.form("team_access_form"):
+            typed_password = st.text_input("Senha da equipe", type="password")
+            submitted = st.form_submit_button("Entrar", width="stretch")
+        if submitted:
+            if typed_password == team_password:
+                st.session_state.team_access_ok = True
+                st.rerun()
+            else:
+                st.error("Senha incorreta.")
+        st.stop()
+    if settings["provider"] != "supabase":
+        st.caption("Acervo em modo local. Para compartilhar com a equipe, configure Supabase nos secrets da implantação.")
+        return
+    if not settings["url"] or not (settings["anon_key"] or settings["service_role_key"]):
+        st.error("Supabase selecionado, mas faltam SUPABASE_URL e SUPABASE_ANON_KEY nos secrets.")
+        st.stop()
+    if settings["service_role_key"]:
+        st.caption("Acervo compartilhado ativo via Supabase. A equipe usa o app; o Supabase fica invisível nos bastidores.")
+        return
+    email = str(st.session_state.get("supabase_user_email") or "")
+    if st.session_state.get("supabase_access_token") and st.session_state.get("supabase_refresh_token"):
+        cols = st.columns([4, 1])
+        cols[0].caption(f"Acervo compartilhado ativo via Supabase · {email or 'sessão autenticada'}")
+        if cols[1].button("Sair", width="stretch"):
+            st.session_state.supabase_access_token = ""
+            st.session_state.supabase_refresh_token = ""
+            st.session_state.supabase_user_email = ""
+            st.rerun()
+        return
+    st.info("Entre com a conta da equipe para usar o acervo compartilhado.")
+    with st.form("supabase_login_form"):
+        login_email = st.text_input("E-mail")
+        login_password = st.text_input("Senha", type="password")
+        submitted = st.form_submit_button("Entrar no acervo", width="stretch")
+    if submitted:
+        try:
+            session = sign_in_supabase_user(settings["url"], settings["anon_key"], login_email, login_password)
+            st.session_state.supabase_access_token = session["access_token"]
+            st.session_state.supabase_refresh_token = session["refresh_token"]
+            st.session_state.supabase_user_email = session["email"]
+            st.rerun()
+        except Exception as exc:
+            st.error(f"Não foi possível entrar no acervo Supabase: {exc}")
+    st.stop()
+
+
+def get_archive_store() -> LocalArchiveStore | SupabaseArchiveStore:
+    settings = archive_backend_settings()
+    if settings["provider"] == "supabase":
+        return SupabaseArchiveStore(
+            SupabaseArchiveConfig(
+                url=settings["url"],
+                anon_key=settings["anon_key"],
+                service_role_key=settings["service_role_key"],
+                bucket=settings["bucket"],
+                access_token=str(st.session_state.get("supabase_access_token") or ""),
+                refresh_token=str(st.session_state.get("supabase_refresh_token") or ""),
+            )
+        ).bootstrap()
+    return LocalArchiveStore(ARCHIVE_DIR).bootstrap()
+
+
+def archive_dataset_label(dataset: dict[str, object]) -> str:
+    active = dataset.get("active_version_id") or ""
+    versions = dataset.get("versions") or []
+    active_version = next((version for version in versions if version.get("id") == active), None)
+    suffix = f"v{active_version.get('sequence')}" if active_version else "sem versão ativa"
+    return f"{dataset.get('name')} · {suffix}"
+
+
+def archive_base_label(base: dict[str, object]) -> str:
+    active = base.get("active_version_id") or ""
+    versions = base.get("versions") or []
+    active_version = next((version for version in versions if version.get("id") == active), None)
+    kind = "referência" if base.get("kind") == "reference" else "produção"
+    suffix = f"v{active_version.get('sequence')}" if active_version else "sem versão ativa"
+    return f"{base.get('name')} · {kind} · {suffix}"
+
+
+def active_dataset_for_session(store: LocalArchiveStore) -> tuple[dict | None, dict | None]:
+    dataset_id = str(st.session_state.get("archive_dataset_id") or "")
+    if not dataset_id:
+        return None, None
+    dataset = store.get_dataset(dataset_id)
+    version = store.active_dataset_version(dataset_id) if dataset else None
+    if version:
+        st.session_state.archive_dataset_version_id = version["id"]
+    return dataset, version
+
+
+def load_archive_base(store: LocalArchiveStore, base_id: str) -> str | None:
+    base = next((item for item in store.list_base_images() if item.get("id") == base_id), None)
+    if not base or not base.get("active_version_id"):
+        return "Imagem-base sem versão ativa."
+    version = store.get_base_image_version(str(base["active_version_id"]))
+    if not version:
+        return "Versão da imagem-base não encontrada."
+    try:
+        base_bytes = store.base_image_version_bytes(version)
+    except Exception as exc:
+        return f"Arquivo da imagem-base não encontrado no acervo: {exc}"
+    set_free_base_image(base_bytes, str(version.get("file_name") or "base.png"))
+    st.session_state.archive_base_image_id = str(base["id"])
+    st.session_state.archive_base_image_version_id = str(version["id"])
+    return None
+
+
+def append_archive_fields(store: LocalArchiveStore, dataset_id: str) -> tuple[int, str]:
+    dataset = store.get_dataset(dataset_id)
+    version = store.active_dataset_version(dataset_id) if dataset else None
+    if not dataset or not version:
+        return 0, "Conjunto sem versão ativa."
+    dataframe, version = store.load_dataset_dataframe(str(version["id"]))
+    image_width, image_height = st.session_state.free_base_image_size or (1122, 1402)
+    existing = normalize_fields(st.session_state.free_fields, image_width, image_height)
+    new_fields = fields_from_dataset_observations(
+        dataframe,
+        dataset_id,
+        str(version["id"]),
+        store.list_indicator_definitions(),
+        image_width,
+        image_height,
+        existing_fields=existing,
+    )
+    st.session_state.free_fields = normalize_fields(existing + new_fields, image_width, image_height)
+    st.session_state.archive_dataset_id = dataset_id
+    st.session_state.archive_dataset_version_id = str(version["id"])
+    reset_free_editor_state()
+    return len(new_fields), ""
+
+
+def append_archive_chart(store: LocalArchiveStore, dataset_id: str, indicator_ids: list[str], chart_type: str, title: str) -> tuple[bool, str]:
+    dataset = store.get_dataset(dataset_id)
+    version = store.active_dataset_version(dataset_id) if dataset else None
+    if not dataset or not version:
+        return False, "Conjunto sem versão ativa."
+    if not indicator_ids:
+        return False, "Selecione pelo menos um indicador para o gráfico."
+    dataframe, version = store.load_dataset_dataframe(str(version["id"]))
+    image_width, image_height = st.session_state.free_base_image_size or (1122, 1402)
+    existing = normalize_fields(st.session_state.free_fields, image_width, image_height)
+    chart = make_chart_element(
+        dataset_id,
+        str(version["id"]),
+        dataframe,
+        store.list_indicator_definitions(),
+        indicator_ids,
+        chart_type=chart_type,
+        title=title,
+        existing_ids=[str(item.get("id")) for item in existing],
+        order=len(existing) + 1,
+        image_width=image_width,
+        image_height=image_height,
+    )
+    st.session_state.free_fields = normalize_fields(existing + [chart], image_width, image_height)
+    st.session_state.archive_dataset_id = dataset_id
+    st.session_state.archive_dataset_version_id = str(version["id"])
+    reset_free_editor_state()
+    return True, ""
+
+
+def append_archive_dimension_chart(
+    store: LocalArchiveStore,
+    dataset_id: str,
+    category_column: str,
+    value_column_name: str,
+    operation: str,
+    chart_type: str,
+    title: str,
+) -> tuple[bool, str]:
+    dataset = store.get_dataset(dataset_id)
+    version = store.active_dataset_version(dataset_id) if dataset else None
+    if not dataset or not version:
+        return False, "Conjunto sem versão ativa."
+    dataframe, version = store.load_dataset_dataframe(str(version["id"]))
+    image_width, image_height = st.session_state.free_base_image_size or (1122, 1402)
+    existing = normalize_fields(st.session_state.free_fields, image_width, image_height)
+    chart, errors = make_dimension_chart_element(
+        dataset_id,
+        str(version["id"]),
+        dataframe,
+        category_column,
+        value_column_name,
+        operation=operation,
+        chart_type=chart_type,
+        title=title,
+        existing_ids=[str(item.get("id")) for item in existing],
+        order=len(existing) + 1,
+        image_width=image_width,
+        image_height=image_height,
+    )
+    if errors:
+        return False, "; ".join(errors)
+    st.session_state.free_fields = normalize_fields(existing + [chart], image_width, image_height)
+    st.session_state.archive_dataset_id = dataset_id
+    st.session_state.archive_dataset_version_id = str(version["id"])
+    reset_free_editor_state()
+    return True, ""
+
+
+def save_current_free_project_to_archive(store: LocalArchiveStore, base_bytes: bytes, base_name: str, project_name: str, fields: list[dict], image_size: tuple[int, int]) -> dict[str, object]:
+    if not st.session_state.get("archive_base_image_id") or not st.session_state.get("archive_base_image_version_id"):
+        base = store.register_base_image(base_name, "Imagem-base salva pelo editor", "production")
+        version = store.add_base_image_version(str(base["id"]), base_bytes, base_name, review_status="pending")
+        st.session_state.archive_base_image_id = str(base["id"])
+        st.session_state.archive_base_image_version_id = str(version["id"])
+    result = store.save_infographic(
+        name=project_name or Path(base_name).stem or "Infográfico",
+        base_image_id=str(st.session_state.archive_base_image_id),
+        base_image_version_id=str(st.session_state.archive_base_image_version_id),
+        fields=fields,
+        image_size=image_size,
+        infographic_id=str(st.session_state.get("archive_infographic_id") or ""),
+        expected_revision_id=str(st.session_state.get("archive_revision_id") or ""),
+    )
+    if result.get("status") == "saved":
+        st.session_state.archive_infographic_id = str((result.get("infographic") or {}).get("id") or "")
+        st.session_state.archive_revision_id = str((result.get("revision") or {}).get("id") or "")
+    return result
+
+
+def load_archive_infographic(store: LocalArchiveStore, infographic_id: str) -> str | None:
+    revision = store.latest_infographic_revision(infographic_id)
+    if not revision:
+        return "Revisão do infográfico não encontrada."
+    config = revision.get("config") or {}
+    base_version_id = str(revision.get("base_image_version_id") or (config.get("base_image") or {}).get("version_id") or "")
+    base_version = store.get_base_image_version(base_version_id)
+    if not base_version:
+        return "Versão da imagem-base não encontrada."
+    try:
+        base_bytes = store.base_image_version_bytes(base_version)
+    except Exception as exc:
+        return f"Arquivo da imagem-base não encontrado: {exc}"
+    set_free_base_image(base_bytes, str(base_version.get("file_name") or "base.png"))
+    image_size = (int(base_version.get("width") or 1122), int(base_version.get("height") or 1402))
+    st.session_state.free_project_name = str(config.get("name") or "")
+    st.session_state.free_fields = normalize_fields(config.get("fields") or [], image_size[0], image_size[1])
+    st.session_state.archive_infographic_id = infographic_id
+    st.session_state.archive_revision_id = str(revision["id"])
+    st.session_state.archive_base_image_id = str((config.get("base_image") or {}).get("id") or "")
+    st.session_state.archive_base_image_version_id = base_version_id
+    datasets = {
+        str((field.get("binding") or {}).get("dataset_id"))
+        for field in st.session_state.free_fields
+        if (field.get("binding") or {}).get("dataset_id")
+    }
+    if datasets:
+        st.session_state.archive_dataset_id = sorted(datasets)[0]
+    st.session_state.free_screen = "editor"
+    reset_free_editor_state()
+    return None
+
+
+def generate_archive_infographic(store: LocalArchiveStore, infographic_id: str) -> tuple[list[Path], list[str]]:
+    revision = store.latest_infographic_revision(infographic_id)
+    if not revision:
+        return [], ["Revisão do infográfico não encontrada."]
+    config = revision.get("config") or {}
+    base_version = store.get_base_image_version(str(revision.get("base_image_version_id") or ""))
+    if not base_version:
+        return [], ["Versão da imagem-base não encontrada."]
+    try:
+        base_bytes = store.base_image_version_bytes(base_version)
+    except Exception as exc:
+        return [], [f"Arquivo da imagem-base não encontrado: {exc}"]
+    fields = normalize_fields(config.get("fields") or [], int(base_version.get("width") or 1122), int(base_version.get("height") or 1402))
+    names = free_mode_export_names(str(config.get("name") or base_version.get("file_name") or "infografico"), date.today())
+    output_png = OUTPUT_DIR / names["png"]
+    output_pdf = OUTPUT_DIR / names["pdf"]
+    validation_path = OUTPUT_DIR / names["validation"]
+    report = render_free_infographic(base_bytes, fields, output_png, output_pdf)
+    rendered_count = len([field for field in fields if field.get("enabled", True) and field.get("placed", True)])
+    write_free_validation_report(report, validation_path, rendered_count, str(base_version.get("file_name") or "base.png"))
+    store.record_generation(
+        infographic_id,
+        str(revision["id"]),
+        [str(output_png), str(output_pdf), str(validation_path)],
+        {"errors": report.errors, "width": report.width, "height": report.height},
+    )
+    return [output_png, output_pdf, validation_path], report.errors
 
 
 def editable_free_fields_table(fields: list[dict], image_size: tuple[int, int]) -> list[dict]:
@@ -976,6 +1335,10 @@ def load_free_project(config_path: Path) -> str | None:
     st.session_state.free_project_name = str(config.get("name") or "")
     st.session_state.free_fields = normalize_fields(config.get("fields") or [], int(image_size[0] or 1122), int(image_size[1] or 1402))
     st.session_state.free_screen = "editor"
+    st.session_state.archive_infographic_id = ""
+    st.session_state.archive_revision_id = ""
+    st.session_state.archive_base_image_id = str(base_image.get("id") or "")
+    st.session_state.archive_base_image_version_id = str(base_image.get("version_id") or "")
     reset_free_editor_state()
     return None
 
@@ -1049,53 +1412,103 @@ def update_free_project_config(config_path: Path) -> str | None:
     return None
 
 
-def render_free_home() -> None:
-    st.title("Infográficos")
-    st.caption("Gerencie infográficos baseados em imagem-base e campos posicionáveis.")
-    actions = st.columns([1, 1, 1, 4])
+def render_archive_infographics_tab(store: LocalArchiveStore) -> None:
+    actions = st.columns([1, 1, 1, 1, 3])
     if actions[0].button("Novo infográfico", width="stretch"):
         clear_free_mode()
         st.session_state.free_screen = "editor"
         st.rerun()
-    projects = saved_free_projects()
-    if actions[1].button("Atualizar todos", width="stretch"):
-        errors = []
-        for project in projects:
-            error = update_free_project_config(project["path"])
-            if error:
-                errors.append(error)
-        if errors:
-            st.warning("\n".join(errors))
+
+    archive_projects = store.list_infographics()
+    local_projects = saved_free_projects()
+
+    if actions[1].button("Verificar atualizações", width="stretch"):
+        pending = sum(item.get("updates_available", 0) for item in store.list_infographics())
+        if pending:
+            st.warning(f"{pending} atualização(ões) de dados disponível(is) no acervo.")
         else:
-            st.success(f"{len(projects)} infográfico(s) atualizado(s).")
-        projects = saved_free_projects()
-    if actions[2].button("Gerar todos", width="stretch"):
-        total = 0
+            st.success("Nenhum infográfico do acervo está pendente.")
+
+    if actions[2].button("Atualizar todos", width="stretch"):
+        results = []
+        for project in archive_projects:
+            if project.get("updates_available"):
+                result = store.apply_dataset_updates(str(project["id"]))
+                results.append(f"{project['name']}: {result.get('status')}")
+        if not results:
+            st.info("Nenhum infográfico elegível para atualizar.")
+        else:
+            st.success("\n".join(results))
+        archive_projects = store.list_infographics()
+
+    if actions[3].button("Gerar todos", width="stretch"):
+        generated_count = 0
         errors = []
-        for project in projects:
+        for project in archive_projects:
+            generated, messages = generate_archive_infographic(store, str(project["id"]))
+            generated_count += len([path for path in generated if path.suffix.lower() in {".png", ".pdf"}])
+            errors.extend(messages)
+        for project in local_projects:
             generated, messages = generate_free_project_from_config(project["path"])
-            total += len([path for path in generated if path.suffix.lower() in {".png", ".pdf"}])
+            generated_count += len([path for path in generated if path.suffix.lower() in {".png", ".pdf"}])
             errors.extend(messages)
         if errors:
             st.warning("\n".join(errors))
-        st.success(f"Geração concluída para {len(projects)} infográfico(s). Arquivos principais gerados: {total}.")
+        st.success(f"Geração concluída. Arquivos principais gerados: {generated_count}.")
 
-    if not projects:
-        st.info("Nenhum infográfico salvo ainda. Crie um novo ou carregue uma configuração YAML no editor.")
+    st.subheader("Acervo persistente")
+    if not archive_projects:
+        st.info("Nenhum infográfico salvo no acervo ainda.")
+    else:
+        header = st.columns([3, 0.8, 0.8, 0.9, 0.9, 0.9])
+        header[0].markdown("**Nome**")
+        header[1].markdown("**Rev.**")
+        header[2].markdown("**Campos**")
+        header[3].markdown("**Status**")
+        header[4].markdown("**Abrir**")
+        header[5].markdown("**Gerar**")
+        for index, project in enumerate(archive_projects):
+            cols = st.columns([3, 0.8, 0.8, 0.9, 0.9, 0.9])
+            cols[0].write(project["name"])
+            cols[1].write(project.get("revision", 0))
+            cols[2].write(project.get("field_count", 0))
+            if project.get("updates_available"):
+                cols[3].warning("atualizar")
+            else:
+                cols[3].success("atual")
+            if cols[4].button("Abrir", key=f"archive_open_{index}", width="stretch"):
+                error = load_archive_infographic(store, str(project["id"]))
+                if error:
+                    st.error(error)
+                else:
+                    st.rerun()
+            if cols[5].button("Gerar", key=f"archive_generate_{index}", width="stretch"):
+                generated, messages = generate_archive_infographic(store, str(project["id"]))
+                if messages:
+                    st.warning("\n".join(messages))
+                if generated:
+                    st.success("Arquivos gerados em output/.")
+                    for path in generated:
+                        if path.exists():
+                            mime = "image/png" if path.suffix.lower() == ".png" else "application/pdf" if path.suffix.lower() == ".pdf" else "text/plain"
+                            st.download_button(f"Baixar {path.name}", path.read_bytes(), file_name=path.name, mime=mime, key=f"archive_dl_{index}_{path.name}")
+
+    st.subheader("Arquivos locais em output/")
+    if not local_projects:
+        st.caption("Nenhuma configuração local encontrada.")
         return
-
     header = st.columns([3, 1.2, 0.9, 0.9, 0.9])
     header[0].markdown("**Nome**")
     header[1].markdown("**Atualizado**")
     header[2].markdown("**Campos**")
-    header[3].markdown("**Atualizar**")
+    header[3].markdown("**Abrir**")
     header[4].markdown("**Gerar**")
-    for index, project in enumerate(projects):
+    for index, project in enumerate(local_projects):
         cols = st.columns([3, 1.2, 0.9, 0.9, 0.9])
         cols[0].write(project["name"])
         cols[1].write(project["updated"])
         cols[2].write(project["field_count"])
-        if cols[3].button("Atualizar", key=f"free_open_{index}", width="stretch"):
+        if cols[3].button("Abrir", key=f"free_open_{index}", width="stretch"):
             error = load_free_project(project["path"])
             if error:
                 st.error(error)
@@ -1111,6 +1524,216 @@ def render_free_home() -> None:
                     if path.exists():
                         mime = "image/png" if path.suffix.lower() == ".png" else "application/pdf" if path.suffix.lower() == ".pdf" else "text/plain"
                         st.download_button(f"Baixar {path.name}", path.read_bytes(), file_name=path.name, mime=mime, key=f"free_dl_{index}_{path.name}")
+
+
+def render_archive_datasets_tab(store: LocalArchiveStore) -> None:
+    st.subheader("Dados")
+    with st.form("archive_dataset_form", clear_on_submit=False):
+        name = st.text_input("Nome do conjunto")
+        description = st.text_area("Descrição", height=70)
+        owner = st.text_input("Responsável")
+        public_source = st.text_input("Fonte pública")
+        period = st.text_input("Período/cobertura")
+        source_updated_at = st.text_input("Data informada pela fonte")
+        uploaded = st.file_uploader("CSV", type=["csv"])
+        submitted = st.form_submit_button("Cadastrar ou publicar nova versão", width="stretch")
+    if submitted:
+        if uploaded is None:
+            st.error("Envie um CSV para versionar o conjunto.")
+        else:
+            try:
+                dataset = store.register_dataset(name, description, owner, public_source)
+                version = store.add_dataset_version(
+                    str(dataset["id"]),
+                    uploaded.getvalue(),
+                    uploaded.name,
+                    period=period,
+                    public_source=public_source,
+                    source_updated_at=source_updated_at,
+                )
+                if version["status"] == "valid":
+                    st.success(f"Versão v{version['sequence']} publicada como ativa.")
+                else:
+                    st.warning("Versão registrada, mas não ativada: " + "; ".join(version.get("validation_errors") or []))
+            except Exception as exc:
+                st.error(f"Não foi possível salvar o conjunto: {exc}")
+
+    datasets = store.list_datasets()
+    if not datasets:
+        st.info("Nenhum conjunto cadastrado.")
+        return
+    rows = []
+    for dataset in datasets:
+        active = next((version for version in dataset.get("versions", []) if version.get("id") == dataset.get("active_version_id")), None)
+        rows.append({
+            "nome": dataset.get("name"),
+            "fonte pública": dataset.get("public_source"),
+            "versão ativa": f"v{active.get('sequence')}" if active else "sem versão ativa",
+            "linhas": (active.get("schema") or {}).get("row_count", "") if active else "",
+            "período": active.get("period", "") if active else "",
+            "infográficos": dataset.get("dependent_count", 0),
+        })
+    st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
+    for dataset in datasets:
+        with st.expander(archive_dataset_label(dataset)):
+            versions = dataset.get("versions") or []
+            st.dataframe(pd.DataFrame([{
+                "versão": f"v{version.get('sequence')}",
+                "status": version.get("status"),
+                "checksum": str(version.get("checksum") or "")[:12],
+                "período": version.get("period"),
+                "linhas": (version.get("schema") or {}).get("row_count", ""),
+                "enviada em": version.get("uploaded_at"),
+            } for version in versions]), width="stretch", hide_index=True)
+            if st.button("Usar este conjunto no editor", key=f"archive_use_dataset_{dataset['id']}"):
+                st.session_state.archive_dataset_id = str(dataset["id"])
+                st.session_state.archive_dataset_version_id = str(dataset.get("active_version_id") or "")
+                st.session_state.free_screen = "editor"
+                st.rerun()
+
+
+def render_archive_bases_tab(store: LocalArchiveStore) -> None:
+    st.subheader("Imagens-base")
+    with st.form("archive_base_form", clear_on_submit=False):
+        name = st.text_input("Nome da imagem-base")
+        description = st.text_area("Descrição da imagem", height=70)
+        kind = st.radio("Tipo", ["production", "reference"], format_func=lambda value: "Base limpa de produção" if value == "production" else "Referência preenchida", horizontal=True)
+        uploaded = st.file_uploader("PNG/JPG", type=["png", "jpg", "jpeg"])
+        submitted = st.form_submit_button("Cadastrar imagem-base", width="stretch")
+    if submitted:
+        if uploaded is None:
+            st.error("Envie uma imagem PNG ou JPG.")
+        else:
+            try:
+                base = store.register_base_image(name or uploaded.name, description, kind)
+                version = store.add_base_image_version(str(base["id"]), uploaded.getvalue(), uploaded.name, review_status="pending")
+                if version["status"] == "valid":
+                    st.success(f"Imagem cadastrada em v{version['sequence']}.")
+                else:
+                    st.warning("Imagem registrada, mas inválida: " + "; ".join(version.get("validation_errors") or []))
+            except Exception as exc:
+                st.error(f"Não foi possível salvar a imagem-base: {exc}")
+
+    bases = store.list_base_images()
+    if not bases:
+        st.info("Nenhuma imagem-base cadastrada.")
+        return
+    rows = []
+    for base in bases:
+        active = next((version for version in base.get("versions", []) if version.get("id") == base.get("active_version_id")), None)
+        rows.append({
+            "nome": base.get("name"),
+            "tipo": "referência" if base.get("kind") == "reference" else "produção",
+            "versão ativa": f"v{active.get('sequence')}" if active else "sem versão ativa",
+            "dimensões": f"{active.get('width')} x {active.get('height')}" if active else "",
+            "status": active.get("status", "") if active else "",
+        })
+    st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
+    for base in bases:
+        with st.expander(archive_base_label(base)):
+            versions = base.get("versions") or []
+            st.dataframe(pd.DataFrame([{
+                "versão": f"v{version.get('sequence')}",
+                "status": version.get("status"),
+                "revisão": version.get("review_status"),
+                "dimensões": f"{version.get('width')} x {version.get('height')}",
+                "checksum": str(version.get("checksum") or "")[:12],
+            } for version in versions]), width="stretch", hide_index=True)
+            if base.get("kind") == "reference":
+                st.caption("Referência preenchida: use como miniatura/guia, não como base de produção.")
+            if st.button("Usar esta imagem no editor", key=f"archive_use_base_{base['id']}"):
+                error = load_archive_base(store, str(base["id"]))
+                if error:
+                    st.error(error)
+                else:
+                    st.session_state.free_screen = "editor"
+                    st.rerun()
+
+
+def render_archive_catalog_tab(store: LocalArchiveStore) -> None:
+    st.subheader("Catálogo de indicadores")
+    definitions = store.list_indicator_definitions()
+    rows = [{
+        "id": item["id"],
+        "rótulo": item["label"],
+        "unidade": item["unit"],
+        "categoria": item["category"],
+        "formato": item["format"],
+        "status": item["semantic_status"],
+    } for item in definitions]
+    st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
+    with st.expander("Cadastrar novo indicador"):
+        with st.form("archive_indicator_form"):
+            indicator_id = st.text_input("ID estável")
+            label = st.text_input("Rótulo padrão")
+            unit = st.text_input("Unidade")
+            category = st.text_input("Categoria", "Geral")
+            aliases = st.text_input("Aliases aprovados, separados por vírgula")
+            format_name = st.selectbox("Formato", ["integer_pt_br", "percent_pt_br", "text"])
+            submitted = st.form_submit_button("Salvar definição", width="stretch")
+        if submitted:
+            definition, errors = store.save_indicator_definition({
+                "id": indicator_id,
+                "label": label,
+                "unit": unit,
+                "category": category,
+                "aliases": [item.strip() for item in aliases.split(",") if item.strip()],
+                "format": format_name,
+                "precision": 2 if format_name == "percent_pt_br" else 0,
+                "references": [],
+                "allowed_operations": ["direct_value", "sum", "latest"],
+                "semantic_status": "pendente",
+            })
+            if errors:
+                st.error("; ".join(errors))
+            else:
+                st.success(f"Indicador salvo: {definition['id']}")
+
+
+def render_archive_admin_tab(store: LocalArchiveStore) -> None:
+    st.subheader("Diagnóstico e backup")
+    diagnostics = store.diagnostics()
+    st.json(diagnostics)
+    backup_name = f"backup_acervo_{date.today().isoformat()}.zip"
+    if st.button("Gerar backup local", width="stretch"):
+        backup_path = store.create_backup(OUTPUT_DIR / backup_name)
+        st.success(f"Backup gerado em {backup_path.name}.")
+    backup_path = OUTPUT_DIR / backup_name
+    if backup_path.exists():
+        st.download_button("Baixar backup", backup_path.read_bytes(), file_name=backup_path.name, mime="application/zip")
+    if diagnostics.get("provider") == "supabase":
+        st.caption("Acervo compartilhado ativo. O backup baixa metadados e arquivos versionados do Supabase para um ZIP local.")
+    else:
+        st.caption("No Streamlit Community Cloud, este acervo local é útil para testes. Para produção recorrente, configure Supabase usando as migrações e segredos documentados.")
+
+
+def render_free_home() -> None:
+    st.title("Infográficos")
+    st.caption("Gerencie infográficos, bases, CSVs versionados e indicadores reutilizáveis.")
+    settings = archive_backend_settings()
+    render_archive_access_gate(settings)
+    try:
+        store = get_archive_store()
+    except SupabaseArchiveError as exc:
+        st.error(f"Acervo Supabase indisponível: {exc}")
+        st.stop()
+    except Exception as exc:
+        if settings["provider"] == "supabase":
+            st.error("Não foi possível abrir o acervo Supabase. Confirme se a migração foi aplicada e se as permissões estão corretas.")
+            st.caption(str(exc))
+            st.stop()
+        raise
+    tabs = st.tabs(["Infográficos", "Dados", "Imagens-base", "Catálogo", "Backup"])
+    with tabs[0]:
+        render_archive_infographics_tab(store)
+    with tabs[1]:
+        render_archive_datasets_tab(store)
+    with tabs[2]:
+        render_archive_bases_tab(store)
+    with tabs[3]:
+        render_archive_catalog_tab(store)
+    with tabs[4]:
+        render_archive_admin_tab(store)
 
 
 def positions_changed(before: list[dict], after: list[dict]) -> bool:
@@ -1140,6 +1763,7 @@ def preview_refresh_needed(before: list[dict], after: list[dict]) -> bool:
 
 
 def render_free_editor() -> None:
+    store = get_archive_store()
     st.title("Novo infográfico")
     project_name = st.text_input("Nome do infográfico", st.session_state.free_project_name or "")
     st.session_state.free_project_name = project_name.strip()
@@ -1159,10 +1783,76 @@ def render_free_editor() -> None:
             st.success("Imagem-base de exemplo carregada.")
             st.rerun()
 
+        with st.expander("Acervo", expanded=True):
+            bases = store.list_base_images(production_only=True)
+            if bases:
+                base_ids = [str(base["id"]) for base in bases]
+                selected_base = st.selectbox(
+                    "Imagem-base cadastrada",
+                    base_ids,
+                    format_func=lambda value: archive_base_label(next((base for base in bases if base["id"] == value), {"name": value})),
+                    key="archive_base_picker",
+                )
+                if st.button("Usar base do acervo", width="stretch"):
+                    error = load_archive_base(store, selected_base)
+                    if error:
+                        st.error(error)
+                    else:
+                        st.success("Imagem-base carregada do acervo.")
+                        st.rerun()
+            else:
+                st.caption("Nenhuma base limpa cadastrada.")
+
+            datasets = store.list_datasets()
+            if datasets:
+                dataset_ids = [str(dataset["id"]) for dataset in datasets]
+                selected_dataset = st.selectbox(
+                    "Conjunto de dados",
+                    dataset_ids,
+                    format_func=lambda value: archive_dataset_label(next((dataset for dataset in datasets if dataset["id"] == value), {"name": value})),
+                    key="archive_dataset_picker",
+                )
+                if st.button("Selecionar conjunto", width="stretch"):
+                    st.session_state.archive_dataset_id = selected_dataset
+                    selected = store.get_dataset(selected_dataset)
+                    st.session_state.archive_dataset_version_id = str((selected or {}).get("active_version_id") or "")
+                    st.success("Conjunto selecionado.")
+                if st.button("Adicionar campos vinculados", width="stretch"):
+                    if st.session_state.free_base_image_bytes is None:
+                        st.warning("Carregue uma imagem-base antes de adicionar campos.")
+                    else:
+                        count, error = append_archive_fields(store, selected_dataset)
+                        if error:
+                            st.error(error)
+                        else:
+                            st.success(f"{count} campo(s) adicionados à tabela do editor.")
+                            st.rerun()
+            else:
+                st.caption("Nenhum conjunto de dados cadastrado.")
+
+            if st.session_state.get("archive_infographic_id"):
+                updates = store.check_infographic_updates(str(st.session_state.archive_infographic_id))
+                if updates:
+                    st.warning(f"{len(updates)} atualização(ões) disponível(is).")
+                else:
+                    st.success("Dados do acervo atualizados.")
+                if st.button("Atualizar vínculos do acervo", width="stretch"):
+                    result = store.apply_dataset_updates(str(st.session_state.archive_infographic_id))
+                    if result.get("status") == "saved":
+                        load_archive_infographic(store, str(st.session_state.archive_infographic_id))
+                        st.success("Dados atualizados preservando o layout.")
+                        st.rerun()
+                    elif result.get("status") == "blocked":
+                        st.error(str(result.get("message") or "Atualização bloqueada."))
+                    else:
+                        st.info(str(result.get("message") or result.get("status")))
+
         uploaded_base = st.file_uploader("Carregar imagem-base", type=["png", "jpg", "jpeg"], key="free_base_upload")
         if uploaded_base is not None:
             try:
                 set_free_base_image(uploaded_base.getvalue(), uploaded_base.name)
+                st.session_state.archive_base_image_id = ""
+                st.session_state.archive_base_image_version_id = ""
             except Exception as exc:
                 st.error(f"Não foi possível abrir a imagem-base: {exc}")
 
@@ -1242,6 +1932,56 @@ def render_free_editor() -> None:
             st.session_state.free_fields = fields
             reset_free_editor_state()
             st.rerun()
+        dataset, version = active_dataset_for_session(store)
+        if dataset and version:
+            with st.expander("Adicionar gráfico vinculado aos dados", expanded=True):
+                dataframe, _version = store.load_dataset_dataframe(str(version["id"]))
+                source_kind = st.radio(
+                    "Fonte da série",
+                    ["indicators", "dimension"],
+                    format_func=lambda value: "Indicadores do catálogo" if value == "indicators" else "Coluna/dimensão do CSV",
+                )
+                chart_kind = st.radio(
+                    "Tipo",
+                    ["bar_horizontal", "bar_vertical"],
+                    format_func=lambda value: "Barras horizontais / linhas" if value == "bar_horizontal" else "Colunas verticais",
+                    horizontal=True,
+                )
+                chart_title = st.text_input("Título do gráfico", "Gráfico")
+                if source_kind == "indicators":
+                    observations = rows_as_indicator_observations(dataframe, store.list_indicator_definitions())
+                    choices = []
+                    labels = {}
+                    for observation in observations:
+                        indicator_id = str(observation.get("indicator_id") or "")
+                        if indicator_id and indicator_id not in choices:
+                            choices.append(indicator_id)
+                            labels[indicator_id] = str(observation.get("label") or indicator_id)
+                    selected_indicators = st.multiselect(
+                        "Indicadores da série",
+                        choices,
+                        default=choices[: min(5, len(choices))],
+                        format_func=lambda value: labels.get(value, value),
+                    )
+                    if st.button("Inserir gráfico", width="stretch"):
+                        ok, error = append_archive_chart(store, str(dataset["id"]), selected_indicators, chart_kind, chart_title)
+                        if error:
+                            st.error(error)
+                        elif ok:
+                            st.success("Gráfico adicionado à tabela. Arraste-o para a arte.")
+                            st.rerun()
+                else:
+                    columns = [str(column) for column in dataframe.columns]
+                    category_column = st.selectbox("Coluna de categoria/eixo", columns)
+                    value_column_name = st.selectbox("Coluna de valor", columns, index=max(0, columns.index("valor") if "valor" in columns else len(columns) - 1))
+                    operation = st.selectbox("Operação", ["direct_value", "sum"], format_func=lambda value: "valor direto" if value == "direct_value" else "soma")
+                    if st.button("Inserir gráfico por dimensão", width="stretch"):
+                        ok, error = append_archive_dimension_chart(store, str(dataset["id"]), category_column, value_column_name, operation, chart_kind, chart_title)
+                        if error:
+                            st.error(error)
+                        elif ok:
+                            st.success("Gráfico adicionado à tabela. Arraste-o para a arte.")
+                            st.rerun()
         if st.button("Reorganizar grade", width="stretch"):
             current = normalize_fields(st.session_state.free_fields, image_size[0], image_size[1])
             fields = []
@@ -1281,6 +2021,13 @@ def render_free_editor() -> None:
         if st.session_state.free_fields and st.button("Salvar infográfico", width="stretch"):
             saved = save_free_project_files(base_bytes, base_name, st.session_state.free_project_name, st.session_state.free_fields, image_size)
             st.success(f"Infográfico salvo em {saved['config'].name}.")
+        if st.session_state.free_fields and st.button("Salvar no acervo", width="stretch"):
+            result = save_current_free_project_to_archive(store, base_bytes, base_name, st.session_state.free_project_name, st.session_state.free_fields, image_size)
+            if result.get("status") == "conflict":
+                st.warning("Outra revisão foi salva antes desta. Reabra o infográfico ou salve uma cópia com outro nome.")
+            elif result.get("status") == "saved":
+                revision = result.get("revision") or {}
+                st.success(f"Infográfico salvo no acervo como revisão {revision.get('revision')}.")
 
         st.subheader("Exportação")
         active_fields = [field for field in st.session_state.free_fields if field.get("enabled", True) and field.get("placed", True)]
@@ -1300,6 +2047,13 @@ def render_free_editor() -> None:
             config_path = saved["config"]
             report = render_free_infographic(base_bytes, active_fields, output_png, output_pdf)
             write_free_validation_report(report, validation_path, len(active_fields), base_copy.name)
+            if st.session_state.get("archive_infographic_id") and st.session_state.get("archive_revision_id"):
+                store.record_generation(
+                    str(st.session_state.archive_infographic_id),
+                    str(st.session_state.archive_revision_id),
+                    [str(path) for path in [output_png, output_pdf, fields_path, config_path, validation_path, base_copy]],
+                    {"errors": report.errors, "width": report.width, "height": report.height},
+                )
             st.success("Arquivos do modo imagem-base gerados em output/.")
 
             for path in [output_png, output_pdf, fields_path, config_path, validation_path, base_copy]:
@@ -1461,7 +2215,11 @@ init_state()
 inject_styles()
 
 with st.sidebar:
-    selected_mode = st.radio("Modo de criação", [FREE_MODE_LABEL, ADVANCED_MODE_LABEL], key="workflow_mode")
+    st.session_state.workflow_mode = FREE_MODE_LABEL
+    with st.expander("Modo legado", expanded=False):
+        use_advanced_mode = st.checkbox("Abrir indicadores por CSV (avançado)", value=False)
+        st.caption("Fluxo antigo preservado para compatibilidade. O padrão da equipe é Imagem-base.")
+    selected_mode = ADVANCED_MODE_LABEL if use_advanced_mode else FREE_MODE_LABEL
 
 if selected_mode == FREE_MODE_LABEL:
     render_free_mode_app()

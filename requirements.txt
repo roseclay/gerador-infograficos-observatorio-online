@@ -3,3 +3,4 @@ Pillow
 PyYAML
 pytest
 streamlit
+supabase

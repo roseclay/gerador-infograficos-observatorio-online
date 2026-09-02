@@ -37,3 +37,18 @@ def test_reads_windows_1252(tmp_path: Path):
 
     assert profile.encoding == "cp1252"
     assert df.iloc[0]["nome"] == "Pós"
+
+
+def test_detects_standard_long_csv_header(tmp_path: Path):
+    path = tmp_path / "longo.csv"
+    path.write_text(
+        "indicador_id,periodo,recorte_id,valor\n"
+        "pesquisadores_ativos,2021-2026,total,100\n",
+        encoding="utf-8",
+    )
+
+    df, profile = load_csv(path)
+
+    assert profile.has_header is True
+    assert profile.columns == ["indicador_id", "periodo", "recorte_id", "valor"]
+    assert df.iloc[0]["valor"] == "100"

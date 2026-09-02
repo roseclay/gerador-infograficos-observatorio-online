@@ -1,10 +1,8 @@
 # Gerador de infográficos institucionais
 
-Ferramenta local para produzir infográficos institucionais a partir de uma imagem-base ou, no modo avançado, a partir de indicadores configurados em CSV. O fluxo padrão é simples: a pessoa carrega uma arte pronta, posiciona campos de texto sobre ela e exporta a imagem final em PNG/PDF.
+Ferramenta local para gerar infográficos a partir de uma imagem-base ou, no modo avançado, a partir de indicadores configurados em CSV. O fluxo padrão é simples: a pessoa carrega uma arte pronta, posiciona campos de texto sobre ela e exporta a imagem final.
 
-O design segue a identidade visual aprovada pela SECTI, mas números, textos, seções e indicadores são definidos exclusivamente pelo CSV e pelas configurações do usuário.
-
-## Conceito do projeto
+## Conceito correto
 
 - O modo padrão usa a imagem enviada como base real da exportação.
 - No modo avançado de templates, imagens de referência continuam sendo apenas referência visual.
@@ -13,41 +11,11 @@ O design segue a identidade visual aprovada pela SECTI, mas números, textos, se
 - A geração é determinística: a mesma imagem-base, o mesmo CSV/YAML e as mesmas coordenadas produzem o mesmo resultado.
 - O modo padrão com imagem-base, campos arrastáveis e prévias por campo é a versão estável elegível para produção.
 
-## Funcionalidades
+## Instalação no Windows
 
-- Carregamento de imagem-base em PNG ou JPG.
-- Drag-and-drop de campos do CSV para o editor visual.
-- Movimento dos campos com mouse ou setas do teclado.
-- Redimensionamento da área de texto com o mouse.
-- Remoção de textos posicionados no editor.
-- Exportação em PNG e PDF.
-- Salvamento de configurações em YAML.
-- Leitura de CSV agregado ou detalhado no modo avançado.
-- Geração automática local baseada em regras.
-- Configuração manual de indicadores, seções, ícones e cores.
-- Auditoria da origem e do cálculo de cada valor.
+Clique duas vezes em `instalar.bat`.
 
-## Requisitos
-
-- Windows;
-- Python 3.10 ou superior;
-- PowerShell ou Prompt de Comando.
-
-Entre na pasta do projeto antes de executar comandos:
-
-```powershell
-cd gerador-infograficos-observatorio
-```
-
-## Instalação
-
-Clique duas vezes em:
-
-```text
-instalar.bat
-```
-
-Ou execute:
+Ou, pelo PowerShell:
 
 ```powershell
 python -m venv .venv
@@ -56,25 +24,24 @@ python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-## Inicialização
+No terminal comum:
 
-Clique duas vezes em:
-
-```text
-iniciar.bat
+```bat
+python -m venv .venv
+.venv\Scripts\activate.bat
+python -m pip install --upgrade pip
+pip install -r requirements.txt
 ```
+
+## Abrir a ferramenta
+
+Clique duas vezes em `iniciar.bat`.
 
 Ou execute:
 
 ```powershell
 .\.venv\Scripts\Activate.ps1
 streamlit run app.py
-```
-
-A ferramenta abrirá normalmente em:
-
-```text
-http://localhost:8501
 ```
 
 A tela inicial abre no modo `Imagem-base (padrão)`.
@@ -136,27 +103,21 @@ O CSV/YAML salva o nome da imagem-base e as coordenadas dos campos. Para reprodu
 
 O preview do editor é renderizado pelo mesmo mecanismo usado na exportação. A camada de caixas serve para selecionar, arrastar e redimensionar; o texto exibido na arte corresponde ao PNG final.
 
-## Modo avançado: indicadores por CSV
+## Modo legado: indicadores por CSV
 
-Use o seletor `Modo de criação` na barra lateral para acessar `Indicadores por CSV (avançado)`. Esse modo mantém o fluxo anterior com CSV agregado, CSV detalhado, cálculos, auditoria de indicadores, editor de ícones/cores e templates institucionais.
+O fluxo principal da equipe é `Imagem-base (padrão)`. O modo `Indicadores por CSV (avançado)` continua preservado apenas como legado, dentro da opção `Modo legado` na barra lateral. Ele mantém o fluxo anterior com CSV agregado, CSV detalhado, cálculos, auditoria de indicadores, editor de ícones/cores e templates institucionais.
 
 ## Demonstração
 
 No modo padrão, use `Carregar matriz institucional vazia` para testar uma imagem-base pronta e depois carregue ou crie campos.
 
-No modo avançado, use o botão `Carregar exemplo de demonstração` para conhecer o funcionamento da aplicação usando dados fictícios armazenados em:
+No modo legado, use o botão `Carregar exemplo de demonstração` para ver um exemplo fictício já configurado. A interface exibirá um aviso de modo de demonstração. Esse aviso é apenas da interface e não aparece em exportações feitas com CSVs próprios.
 
-```text
-examples/
-```
+Os arquivos demonstrativos ficam em `examples/`.
 
-Esses arquivos servem apenas para demonstração e não devem ser tratados como dados reais.
+## CSV agregado e CSV detalhado
 
-## Formatos de CSV
-
-### CSV agregado
-
-Cada linha contém um indicador já calculado:
+CSV agregado: cada linha já representa um indicador. Exemplo:
 
 ```csv
 Indicador;Valor
@@ -165,11 +126,9 @@ Projetos apoiados;87
 Bolsas concedidas;1.240
 ```
 
-Nesse formato, a ferramenta pode criar automaticamente um card por linha, usando a primeira coluna como rótulo, a segunda como valor e a operação `valor direto`.
+Quando esse formato é detectado com segurança, a ferramenta oferece criar automaticamente um card por linha. A primeira coluna vira rótulo e a segunda vira valor direto.
 
-### CSV detalhado
-
-Cada linha representa um registro individual:
+CSV detalhado: cada linha representa uma ocorrência ou registro. Exemplo:
 
 ```csv
 unidade;projeto;municipio;ano;valor;perfil
@@ -177,26 +136,52 @@ Norte;Alfa;Salvador;2026;10;ativo
 Sul;Beta;Ilhéus;2026;20;ativo
 ```
 
-Os indicadores podem utilizar:
-
-- soma;
-- contagem;
-- contagem distinta;
-- média;
-- percentual;
-- valor direto;
-- último valor.
+Nesse caso, crie os indicadores manualmente e escolha operações como soma, contagem, contagem distinta, média, percentual, valor direto ou último valor.
 
 ## Geração automática offline
 
-Após carregar um CSV, escolha entre:
+Depois de carregar um CSV, a ferramenta oferece dois caminhos:
 
-- **Gerar infográfico automaticamente**;
-- **Configurar manualmente**.
+- `Gerar infográfico automaticamente`
+- `Configurar manualmente`
 
-A geração automática funciona localmente e não utiliza LLM, API externa, OpenAI ou internet. O motor utiliza regras YAML, sinônimos, normalização de texto, classificação de colunas, pontuação de confiança e proteções contra cálculos inadequados.
+A geração automática não usa LLMs, OpenAI API, internet ou serviços externos. Ela roda inteiramente local, usando:
 
-Antes de aplicar uma configuração automática, a ferramenta apresenta:
+- regras em YAML;
+- normalização de acentos, pontuação e espaços;
+- heurísticas simples de singular/plural;
+- dicionário de abreviações;
+- sinônimos e termos negativos;
+- classificação de colunas;
+- correspondência aproximada por biblioteca padrão do Python;
+- pontuação de confiança;
+- validações para evitar operações inseguras.
+
+O modo manual permanece disponível antes e depois da geração automática.
+
+## Motor de regras
+
+As regras institucionais ficam em:
+
+```text
+config/semantic_rules.yaml
+```
+
+As regras aprendidas pelo uso ficam em:
+
+```text
+config/custom_semantic_rules.yaml
+```
+
+Cada regra pode definir termos, sinônimos, termos negativos, categoria, seção, ícone, cor, prioridade, confiança mínima, rótulo preferencial e operações compatíveis.
+
+Regras personalizadas têm prioridade sobre regras padrão. O arquivo institucional não é alterado silenciosamente.
+
+## Confiança e revisão
+
+Antes de aplicar qualquer sugestão, a ferramenta mostra `Revisar configuração automática`.
+
+Para cada indicador, a revisão exibe:
 
 - rótulo;
 - valor ou cálculo;
@@ -208,33 +193,23 @@ Antes de aplicar uma configuração automática, a ferramenta apresenta:
 - cor;
 - ordem;
 - confiança;
-- justificativa da sugestão.
+- motivo da escolha.
 
 Níveis de confiança:
 
-- `85-100`: alta;
-- `60-84`: média;
-- abaixo de `60`: baixa.
+- `85–100`: alta;
+- `60–84`: média;
+- abaixo de `60`: baixa, não aplicada automaticamente.
 
-É possível aceitar tudo, aceitar somente sugestões de alta confiança, editar, cancelar ou gerar novamente. Depois de aceitar, todos os editores manuais continuam disponíveis.
+Na revisão, você pode escolher:
 
-## Regras semânticas
+- `Aceitar tudo`;
+- `Aceitar somente alta confiança`;
+- `Editar configuração`;
+- `Cancelar`;
+- `Gerar novamente`.
 
-Regras padrão:
-
-```text
-config/semantic_rules.yaml
-```
-
-Regras criadas durante o uso:
-
-```text
-config/custom_semantic_rules.yaml
-```
-
-As regras podem definir termos, sinônimos, rótulo público, seção, ícone, cor, operação, prioridade e confiança mínima. Regras personalizadas têm prioridade sobre as regras padrão.
-
-Depois de corrigir manualmente seção, ícone, cor ou rótulo de um indicador, use `Salvar esta correção como regra` para reaproveitar a decisão em novos CSVs.
+Depois de aceitar, todos os editores manuais continuam disponíveis.
 
 ## Selecionar design
 
@@ -248,7 +223,7 @@ Neste momento existe somente um design público:
 - capacidade: até 9 indicadores por página;
 - composição: 4 indicadores principais, 2 indicadores intermediários e 3 indicadores complementares.
 
-A miniatura exibida na galeria usa a referência visual polida e aparece identificada na interface como `Referência visual - dados fictícios`. Essa imagem serve apenas para escolha visual do design. Ela não é usada como fundo de exportação.
+A miniatura exibida na galeria usa a referência visual polida e aparece identificada na interface como `Referência visual — dados fictícios`. Essa imagem serve apenas para escolha visual do design. Ela não é usada como fundo de exportação.
 
 A escolha do design é salva no YAML:
 
@@ -281,35 +256,75 @@ assets/references/institucional_claro_v1_referencia.png
 assets/icons/institucional_claro_v1/
 ```
 
-## Fluxo recomendado no modo avançado
+## CSV agregado no modo automático
 
-1. Carregue o CSV.
-2. Confira separador, codificação e cabeçalho.
-3. Escolha a geração automática ou a configuração manual.
-4. Revise as sugestões e os cálculos.
-5. Ajuste rótulos, seções, ícones e cores.
-6. Preencha cabeçalho, título, subtítulo, período, fonte, data, chamada final e endereço eletrônico.
-7. Confira a prévia.
-8. Salve a configuração, se desejar reutilizá-la.
-9. Exporte o infográfico e a auditoria.
+Quando cada linha já representa um indicador e seu valor pronto, a ferramenta:
+
+- cria um card por linha;
+- usa `valor direto`;
+- preserva o valor textual exatamente como veio do CSV;
+- não inventa unidade;
+- sugere seção, ícone, cor e ordem pelas regras semânticas;
+- usa azul institucional como fallback.
+
+## CSV detalhado no modo automático
+
+Quando cada linha representa um registro, a ferramenta classifica colunas como identificador, categoria, número, percentual, booleano, data, texto livre, possível informação pessoal, localização ou instituição.
+
+Operações só são sugeridas quando há segurança suficiente. A ferramenta evita:
+
+- somar códigos, matrículas, anos e identificadores;
+- expor nomes ou dados pessoais como texto público;
+- transformar texto livre em indicador automático;
+- usar soma apenas porque uma coluna parece numérica.
+
+## Aprendizado por regras
+
+Depois de corrigir manualmente seção, ícone, cor ou rótulo de um indicador, use:
+
+```text
+Salvar esta correção como regra
+```
+
+A correção será salva em `config/custom_semantic_rules.yaml` com:
+
+- termo detectado;
+- seção escolhida;
+- ícone escolhido;
+- cor;
+- rótulo público;
+- operação.
+
+Na barra lateral, a área `Regras personalizadas` permite visualizar, editar, salvar e exportar o YAML de regras personalizadas.
+
+## Criar indicadores
+
+Depois de carregar um CSV:
+
+1. Confira colunas, tipos inferidos, ausências e prévia.
+2. Escolha começar vazio, carregar YAML compatível ou criar cards de CSV agregado.
+3. Use `Adicionar indicador` para criar um card.
+4. Edite rótulo, seção, coluna, operação, filtros, prefixo, sufixo, casas decimais, ícone e cor.
+5. Use os controles de duplicar, excluir e reordenar.
+6. Configure a ordem das seções e se o título da seção deve aparecer.
+
+A prévia só é gerada quando existe pelo menos um indicador válido.
+
+## YAML
+
+O YAML salva textos institucionais, indicadores, operações, filtros, seções, ordenação, cores, ícones, exportação e assinatura das colunas do CSV.
+
+Ao carregar um YAML incompatível com o CSV atual, a interface informa quais colunas estão ausentes e não aplica o mapeamento em silêncio.
 
 ## Exportação
 
-Os arquivos são gerados em:
+Os arquivos gerados ficam em `output/` com nomes derivados do CSV e da data, por exemplo:
 
-```text
-output/
-```
+- `infografico_planilha_final_2026-08-25.png`
+- `infografico_planilha_final_2026-08-25.pdf`
+- `auditoria_planilha_final_2026-08-25.csv`
 
-Exemplos:
-
-```text
-infografico_planilha_final_2026-08-25.png
-infografico_planilha_final_2026-08-25.pdf
-auditoria_planilha_final_2026-08-25.csv
-```
-
-Quando necessário, o conteúdo pode ser distribuído em múltiplas páginas.
+Se houver indicadores demais para uma página, a ferramenta oferece geração em múltiplas páginas.
 
 O template `institucional_claro_v1` gera páginas com até 9 indicadores. Ao ultrapassar esse limite, a exportação cria páginas adicionais e repete cabeçalho, rodapé, seções e auditoria de forma consistente.
 
@@ -317,41 +332,94 @@ O nome do arquivo CSV não é usado automaticamente como fonte pública. No info
 
 ## Auditoria
 
-A auditoria pode registrar:
+A auditoria registra, para cada indicador:
 
-- indicador;
 - coluna utilizada;
 - filtro aplicado;
-- operação;
+- operação realizada;
 - valor bruto;
 - valor exibido;
-- período;
-- fonte;
-- decisões da geração automática;
-- template;
-- versão do template;
-- página;
-- seção;
-- slot;
-- ícone usado;
-- fallback visual, quando houver.
+- período informado;
+- fonte.
 
-Use-a para confirmar que cada número veio do CSV ou de uma operação explicitamente configurada.
+Use esse arquivo para conferir que cada número veio do CSV ou de uma operação configurada.
+
+Quando uma configuração automática é aceita, a exportação também pode gerar uma auditoria de inferência com regra utilizada, confiança, justificativa, configuração original e se a decisão veio do modo automático.
+
+A auditoria principal também registra o template, a versão do template, a página, a seção, o slot, o ícone usado e se houve fallback visual.
 
 O arquivo CSV carregado é registrado na coluna `arquivo CSV`, separada da fonte institucional exibida no infográfico.
 
-## Integridade dos dados
+## Acervo versionado
 
-A ferramenta não deve:
+A tela inicial agora possui abas para uso recorrente:
 
-- inventar valores ausentes;
-- preencher cards com números ilustrativos;
-- produzir conclusões sem sustentação;
-- expor nomes ou dados pessoais;
-- somar códigos, matrículas, anos ou identificadores;
-- criar rankings institucionais sem configuração explícita.
+- `Infográficos`: lista projetos salvos no acervo, mostra revisão, campos e atualizações disponíveis.
+- `Dados`: cadastra conjuntos de dados e publica novas versões de CSV.
+- `Imagens-base`: cadastra PNG/JPG e separa base limpa de produção de referência preenchida.
+- `Catálogo`: mantém definições reutilizáveis de indicadores, sem valores embutidos.
+- `Backup`: gera um ZIP local com metadados e arquivos do acervo.
 
-A referência visual orienta somente o design e nunca é utilizada como fonte de dados.
+O acervo local fica em `storage/acervo/` e é ignorado pelo Git. Ele serve para desenvolvimento e uso local. Para produção online recorrente, configure um backend persistente como Supabase usando `docs/producao_acervo.md` e a migração em `supabase/migrations/`.
+
+## Atualização por versão de CSV
+
+O fluxo recomendado é cadastrar o conjunto uma vez e publicar novas versões no mesmo cadastro. Quando uma versão válida nova é ativada, os infográficos vinculados aparecem como pendentes de atualização.
+
+Ao atualizar, a ferramenta:
+
+- resolve a versão ativa do conjunto;
+- recalcula campos e séries de gráficos;
+- preserva posição, tamanho, fonte, cor, textos manuais e imagem-base;
+- registra a nova revisão do infográfico;
+- bloqueia a atualização se houver duplicata, campo ausente, valor incompatível ou vínculo ambíguo.
+
+O layout não é reconstruído do zero. A atualização muda os dados, não o desenho.
+
+## Gráficos no canvas
+
+O modo imagem-base agora aceita gráficos como elementos editáveis. É possível inserir:
+
+- barras horizontais;
+- colunas verticais.
+
+O gráfico entra na mesma tabela de campos, pode ser arrastado para a arte, movido, redimensionado, removido e exportado no PNG/PDF final. A escala é compartilhada dentro da série; cada barra não é desenhada como se fosse 100%.
+
+Os gráficos podem usar uma lista de indicadores do catálogo ou uma série sintética/dimensional preparada no CSV. Para produção, declare as dimensões e evite transformar ausências em zero.
+
+## Formato longo recomendado
+
+Para novos CSVs recorrentes, use:
+
+```csv
+indicador_id,periodo,recorte_id,valor
+pesquisadores_ativos,2021-2026,bahia_total,1234
+grupos_pesquisa,2021-2026,bahia_total,87
+```
+
+CSVs agregados e detalhados antigos continuam funcionando. Quando o CSV não tiver `indicador_id`, a ferramenta pode sugerir vínculos por rótulo/alias, mas ambiguidades precisam de revisão humana.
+
+## Supabase
+
+A estrutura remota usa PostgreSQL para metadados e Supabase Storage para CSVs e imagens-base. O projeto não inclui credenciais reais.
+
+Quando `archive.provider = "supabase"` estiver configurado nos secrets, a tela inicial passa a usar o acervo compartilhado. No modelo simples recomendado, a equipe entra com uma senha da própria ferramenta no Streamlit; ninguém precisa abrir o painel do Supabase nem ter conta individual no Supabase para publicar CSV, imagem-base ou nova versão de dados.
+
+Arquivos relevantes:
+
+- `supabase/migrations/202609020001_acervo_infograficos.sql`
+- `.streamlit/secrets.toml.example`
+- `docs/producao_acervo.md`
+- `docs/referencias_visuais.md`
+
+Fluxo para a equipe:
+
+1. Abrir o link do Streamlit.
+2. Digitar a senha da equipe.
+3. Na aba `Dados`, cadastrar ou publicar nova versão de CSV.
+4. Na aba `Imagens-base`, cadastrar a arte limpa.
+5. Na aba `Infográficos`, abrir, atualizar ou gerar as peças.
+6. No editor, salvar no acervo para que outra pessoa autorizada consiga reabrir depois.
 
 ## Ícones do template
 
@@ -367,7 +435,7 @@ O design institucional claro possui nove ícones extraídos da referência visua
 - bolsa de produtividade;
 - produção técnica.
 
-Esses ícones são selecionados semanticamente por rótulo ou pelo ícone escolhido no editor de aparência. Quando não houver correspondência, a ferramenta usa a biblioteca atual de ícones e marca o caso como `Ícone de fallback - revisão recomendada` na auditoria.
+Esses ícones são selecionados semanticamente por rótulo ou pelo ícone escolhido no editor de aparência. Quando não houver correspondência, a ferramenta usa a biblioteca atual de ícones e marca o caso como `Ícone de fallback — revisão recomendada` na auditoria.
 
 ## Como criar um novo template
 
@@ -394,23 +462,8 @@ Execute:
 .\.venv\Scripts\python -m pytest
 ```
 
-Os testes cobrem CSVs agregados e detalhados, codificações, formatação brasileira, operações estatísticas, YAML, layout, exportação, regras semânticas, confiança, classificação de colunas, regras personalizadas, ausência de conteúdo fictício fora das áreas permitidas, descoberta de templates, manifesto, thumbnail, persistência do template no YAML, uso da matriz limpa, proibição de usar a referência como fundo, extração de ícones, paginação e auditoria com template/página/slot.
+Os testes cobrem CSVs agregados e detalhados, codificações, formatação brasileira, operações estatísticas, YAML, layout, exportação, regras semânticas, confiança, classificação de colunas, regras personalizadas e ausência de conteúdo fictício fora das áreas permitidas.
 
-## Estrutura do projeto
+Também há testes para descoberta de templates, manifesto, thumbnail, persistência do template no YAML, uso da matriz limpa, proibição de usar a referência como fundo, extração de ícones, paginação e auditoria com template/página/slot.
 
-```text
-app.py             Interface Streamlit
-src/               Código da aplicação
-config/            Regras e configurações
-assets/            Logos e recursos visuais
-examples/          Dados fictícios de demonstração
-tests/             Testes automatizados
-output/            Arquivos gerados localmente
-requirements.txt   Dependências Python
-instalar.bat       Instalação no Windows
-iniciar.bat        Inicialização da ferramenta
-```
-
-## Responsabilidade de publicação
-
-Antes de publicar qualquer infográfico, revise o CSV, os filtros, os cálculos, os textos institucionais, a fonte e a auditoria. A ferramenta auxilia a produção visual, mas a responsabilidade final pelos dados publicados permanece com a equipe responsável.
+A camada de produção acrescenta testes de catálogo, versionamento de conjuntos, idempotência, bloqueio de duplicatas, preservação de layout na atualização v1/v2 e renderização de gráficos no canvas.

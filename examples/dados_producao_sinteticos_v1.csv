@@ -1,0 +1,10 @@
+indicador_id,periodo,recorte_id,valor
+pesquisadores_ativos,2021-2026,demo_total,1000
+grupos_pesquisa,2021-2026,demo_total,120
+producao_cientifica_total,2021-2026,demo_total,8500
+pesquisadores_doutorado_percentual,2021-2026,demo_total,"48,5%"
+artigos_cientificos,2021-2026,demo_total,3600
+trabalhos_eventos,2021-2026,demo_total,2400
+capitulos_livro,2021-2026,demo_total,1100
+livros,2021-2026,demo_total,650
+textos_revista,2021-2026,demo_total,300

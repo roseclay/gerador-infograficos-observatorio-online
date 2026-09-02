@@ -11,6 +11,7 @@ from typing import Any
 import pandas as pd
 from PIL import Image, ImageDraw
 
+from .charts import render_chart_image
 from .configuration import slugify_filename
 from .icon_registry import DEFAULT_COLOR, normalize_hex_color
 from .renderer import RenderReport, draw_text_box
@@ -39,6 +40,15 @@ FIELD_COLUMNS = [
     "order",
 ]
 ALIGN_OPTIONS = ["left", "center", "right"]
+ELEMENT_TYPES = {"metric", "text", "chart"}
+EXTRA_FIELD_KEYS = [
+    "type",
+    "binding",
+    "chart",
+    "style",
+    "manual_override",
+    "legacy_binding",
+]
 
 
 @dataclass(frozen=True)
@@ -163,7 +173,15 @@ def normalize_field(
     item["align"] = align if align in ALIGN_OPTIONS else "left"
     item["render_label"] = _to_bool(item.get("render_label"), False)
     item["order"] = max(1, _to_int(item.get("order"), order))
-    return {column: item.get(column) for column in FIELD_COLUMNS}
+    element_type = str(item.get("type") or ("chart" if item.get("chart") else "metric")).strip().lower()
+    if element_type not in ELEMENT_TYPES:
+        element_type = "metric"
+    normalized = {column: item.get(column) for column in FIELD_COLUMNS}
+    normalized["type"] = element_type
+    for key in EXTRA_FIELD_KEYS:
+        if key in item and key != "type":
+            normalized[key] = deepcopy(item[key])
+    return normalized
 
 
 def normalize_fields(fields: list[dict[str, Any]], image_width: int = 1122, image_height: int = 1402) -> list[dict[str, Any]]:
@@ -315,11 +333,16 @@ def fields_from_dataframe(dataframe: pd.DataFrame, image_width: int = 1122, imag
 def fields_to_dataframe(fields: list[dict[str, Any]], base_image_name: str = "") -> pd.DataFrame:
     rows = []
     for field in normalize_fields(fields):
+        binding = field.get("binding") or {}
         rows.append({
             "imagem_base": base_image_name,
+            "tipo": field.get("type") or "metric",
             "posicionado": field["placed"],
             "campo": field["name"],
             "valor": field["value"],
+            "indicador_id": binding.get("indicator_id", ""),
+            "dataset_id": binding.get("dataset_id", ""),
+            "dataset_versao_aplicada": binding.get("applied_version_id", ""),
             "x": field["x"],
             "y": field["y"],
             "largura": field["width"],
@@ -399,19 +422,36 @@ def _open_base_image(base_image: str | Path | bytes | BytesIO | Image.Image) -> 
 def _render_free_canvas(
     base_image: str | Path | bytes | BytesIO | Image.Image,
     fields: list[dict[str, Any]],
-) -> tuple[Image.Image, list[dict[str, Any]], list[dict[str, Any]]]:
+) -> tuple[Image.Image, list[dict[str, Any]], list[dict[str, Any]], list[str]]:
     canvas = _open_base_image(base_image)
     width, height = canvas.size
     draw = ImageDraw.Draw(canvas, "RGBA")
     records: list[dict[str, Any]] = []
     overlap_boxes: list[dict[str, Any]] = []
+    chart_errors: list[str] = []
 
     for field in normalize_fields(fields, width, height):
         if not field.get("enabled", True) or not field.get("placed", True):
             continue
-        _draw_free_field(draw, field, int(field["x"]), int(field["y"]), records, overlap_boxes)
+        x = int(field["x"])
+        y = int(field["y"])
+        w = int(field["width"])
+        h = int(field["height"])
+        if field.get("type") == "chart":
+            chart_image, chart_records, errors = render_chart_image(field.get("chart") or {}, w, h)
+            canvas.alpha_composite(chart_image, (x, y))
+            for record in chart_records:
+                item = deepcopy(record)
+                item["id"] = f"{field.get('id')}-{item.get('id', 'grafico')}"
+                item["x"] = float(item.get("x", 0)) + x
+                item["y"] = float(item.get("y", 0)) + y
+                records.append(item)
+            chart_errors.extend(f"{field.get('name') or field.get('id')}: {error}" for error in errors)
+            overlap_boxes.append({"id": str(field.get("id") or "grafico"), "x": x, "y": y, "w": w, "h": h})
+        else:
+            _draw_free_field(draw, field, x, y, records, overlap_boxes)
 
-    return canvas, records, overlap_boxes
+    return canvas, records, overlap_boxes, chart_errors
 
 
 def _draw_free_field(
@@ -472,7 +512,7 @@ def _draw_free_field(
 
 
 def render_free_preview_bytes(base_image: str | Path | bytes | BytesIO | Image.Image, fields: list[dict[str, Any]]) -> bytes:
-    canvas, _records, _overlap_boxes = _render_free_canvas(base_image, fields)
+    canvas, _records, _overlap_boxes, _chart_errors = _render_free_canvas(base_image, fields)
     buffer = BytesIO()
     canvas.convert("RGB").save(buffer, format="PNG")
     return buffer.getvalue()
@@ -482,6 +522,11 @@ def render_free_field_preview_bytes(field: dict[str, Any], image_width: int = 11
     normalized = normalize_field(field, [], int(field.get("order") or 1), image_width, image_height)
     width = max(24, int(normalized["width"]))
     height = max(18, int(normalized["height"]))
+    if normalized.get("type") == "chart":
+        chart_image, _records, _errors = render_chart_image(normalized.get("chart") or {}, width, height)
+        buffer = BytesIO()
+        chart_image.save(buffer, format="PNG")
+        return buffer.getvalue()
     canvas = Image.new("RGBA", (width, height), (255, 255, 255, 0))
     draw = ImageDraw.Draw(canvas, "RGBA")
     local_field = deepcopy(normalized)
@@ -508,9 +553,9 @@ def render_free_infographic(
     output_png: str | Path,
     output_pdf: str | Path | None = None,
 ) -> RenderReport:
-    canvas, records, overlap_boxes = _render_free_canvas(base_image, fields)
+    canvas, records, overlap_boxes, chart_errors = _render_free_canvas(base_image, fields)
     width, height = canvas.size
-    text_errors = validate_text_bounds(records, width, height)
+    text_errors = validate_text_bounds(records, width, height) + chart_errors
     overlap_errors = validate_no_overlaps(overlap_boxes, padding=0)
 
     output_path = Path(output_png)

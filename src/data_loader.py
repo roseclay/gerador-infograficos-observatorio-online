@@ -81,12 +81,34 @@ def _looks_numeric(value: Any) -> bool:
         return False
 
 
+def _normalized_header_cell(value: Any) -> str:
+    text = str(value or "").strip().lower()
+    text = text.replace("í", "i").replace("é", "e").replace("ç", "c").replace("ã", "a")
+    return "".join(char if char.isalnum() else "_" for char in text).strip("_")
+
+
 def detect_has_header(text: str, separator: str) -> bool:
     rows = list(csv.reader(io.StringIO(text), delimiter=separator))
     rows = [row for row in rows if any(str(cell).strip() for cell in row)]
     if not rows:
         return True
     first = rows[0]
+    known_headers = {
+        "indicador_id",
+        "id_indicador",
+        "indicador",
+        "periodo",
+        "recorte_id",
+        "recorte",
+        "valor",
+        "value",
+        "unidade",
+        "ano",
+        "categoria",
+    }
+    normalized = {_normalized_header_cell(cell) for cell in first}
+    if len(first) > 2 and len(normalized.intersection(known_headers)) >= 2:
+        return True
     if len(first) == 2 and _looks_numeric(first[1]):
         return False
     try:
