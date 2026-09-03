@@ -124,9 +124,14 @@ Depois disso, a equipe não precisa mexer no Supabase. O fluxo normal é pelo St
 1. A pessoa abre o link público ou restrito do app.
 2. Digita a senha da equipe.
 3. Envia CSVs pela aba `Dados`.
-4. Envia artes limpas pela aba `Imagens-base`.
+4. Envia uma ou várias artes limpas pela aba `Imagens-base`.
 5. Salva e reabre infográficos pelo `Acervo persistente`.
 6. Publica nova versão do CSV no mesmo conjunto para liberar o botão de atualização dos infográficos vinculados.
+
+Na aba `Imagens-base`, marque corretamente o tipo:
+
+- `Base limpa de produção`: fundo usado pelo gerador. Não deve conter números, percentuais, barras de gráfico, datas ou textos que mudarão.
+- `Referência preenchida`: imagem já montada, usada apenas como exemplo visual. Ela pode orientar posicionamento e aparência, mas não deve ser fundo final de produção.
 
 Se o time preferir contas individuais, remova `supabase.service_role_key` dos secrets e crie usuários em Authentication no Supabase. Nesse modo, cada pessoa entra com e-mail e senha do Supabase diretamente no app. Para a operação cotidiana, o modelo simples com `access.password` é mais fácil.
 

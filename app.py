@@ -1594,25 +1594,44 @@ def render_archive_datasets_tab(store: LocalArchiveStore) -> None:
 
 def render_archive_bases_tab(store: LocalArchiveStore) -> None:
     st.subheader("Imagens-base")
+    st.caption("Base limpa é a arte sem números/textos variáveis, pronta para gerar infográficos. Referência preenchida é só um modelo visual para consulta, com dados já desenhados.")
     with st.form("archive_base_form", clear_on_submit=False):
         name = st.text_input("Nome da imagem-base")
         description = st.text_area("Descrição da imagem", height=70)
         kind = st.radio("Tipo", ["production", "reference"], format_func=lambda value: "Base limpa de produção" if value == "production" else "Referência preenchida", horizontal=True)
-        uploaded = st.file_uploader("PNG/JPG", type=["png", "jpg", "jpeg"])
-        submitted = st.form_submit_button("Cadastrar imagem-base", width="stretch")
+        uploaded_files = st.file_uploader("PNG/JPG", type=["png", "jpg", "jpeg"], accept_multiple_files=True)
+        submitted = st.form_submit_button("Cadastrar imagem-base(s)", width="stretch")
     if submitted:
-        if uploaded is None:
-            st.error("Envie uma imagem PNG ou JPG.")
+        if not uploaded_files:
+            st.error("Envie uma ou mais imagens PNG ou JPG.")
         else:
-            try:
-                base = store.register_base_image(name or uploaded.name, description, kind)
-                version = store.add_base_image_version(str(base["id"]), uploaded.getvalue(), uploaded.name, review_status="pending")
-                if version["status"] == "valid":
-                    st.success(f"Imagem cadastrada em v{version['sequence']}.")
-                else:
-                    st.warning("Imagem registrada, mas inválida: " + "; ".join(version.get("validation_errors") or []))
-            except Exception as exc:
-                st.error(f"Não foi possível salvar a imagem-base: {exc}")
+            successes = []
+            warnings = []
+            errors = []
+            multiple = len(uploaded_files) > 1
+            for uploaded in uploaded_files:
+                try:
+                    file_stem = Path(uploaded.name).stem
+                    base_name = str(name or "").strip()
+                    if multiple:
+                        base_name = f"{base_name} - {file_stem}" if base_name else file_stem
+                    elif not base_name:
+                        base_name = file_stem
+                    base = store.register_base_image(base_name, description, kind)
+                    version = store.add_base_image_version(str(base["id"]), uploaded.getvalue(), uploaded.name, review_status="pending")
+                    if version["status"] == "valid":
+                        marker = "reenvio idêntico" if version.get("idempotent") else f"v{version['sequence']}"
+                        successes.append(f"{base_name}: {marker}")
+                    else:
+                        warnings.append(f"{base_name}: " + "; ".join(version.get("validation_errors") or []))
+                except Exception as exc:
+                    errors.append(f"{uploaded.name}: {exc}")
+            if successes:
+                st.success("Imagem(ns) cadastrada(s):\n" + "\n".join(successes))
+            if warnings:
+                st.warning("Imagem(ns) registrada(s), mas não ativada(s):\n" + "\n".join(warnings))
+            if errors:
+                st.error("Falha ao cadastrar:\n" + "\n".join(errors))
 
     bases = store.list_base_images()
     if not bases:

@@ -421,6 +421,11 @@ Fluxo para a equipe:
 5. Na aba `Infográficos`, abrir, atualizar ou gerar as peças.
 6. No editor, salvar no acervo para que outra pessoa autorizada consiga reabrir depois.
 
+Na aba `Imagens-base`, é possível enviar uma ou várias imagens de uma vez.
+
+- `Base limpa de produção`: arte sem números, textos variáveis ou barras já preenchidas. É a imagem usada de verdade para gerar o infográfico.
+- `Referência preenchida`: arte exemplo com números e textos já desenhados. Serve como guia visual ou miniatura, mas não deve ser usada como fundo final de produção.
+
 ## Ícones do template
 
 O design institucional claro possui nove ícones extraídos da referência visual:
