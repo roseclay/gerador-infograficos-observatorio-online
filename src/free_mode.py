@@ -46,6 +46,15 @@ EXTRA_FIELD_KEYS = [
     "binding",
     "chart",
     "style",
+    "manual",
+    "field_id",
+    "resolved_value",
+    "resolution_status",
+    "page",
+    "layout",
+    "provenance",
+    "data_filename",
+    "category",
     "manual_override",
     "legacy_binding",
 ]
@@ -396,17 +405,46 @@ def merge_dragged_fields(
         update = updates.get(str(field.get("id")))
         if update:
             item = deepcopy(field)
-            if "placed" in update:
+            changed_properties = update.get("_changed_properties")
+            if not isinstance(changed_properties, list) or not changed_properties:
+                changed_properties = ["placed", "x", "y", "width", "height", "font_size"]
+            changed_properties = {str(property_name) for property_name in changed_properties}
+            if "placed" in changed_properties and "placed" in update:
                 item["placed"] = _to_bool(update.get("placed"), bool(field.get("placed", True)))
-            item["x"] = max(0, min(image_width, _to_int(update.get("x"), int(field["x"]))))
-            item["y"] = max(0, min(image_height, _to_int(update.get("y"), int(field["y"]))))
-            item["width"] = max(24, min(image_width, _to_int(update.get("width"), int(field["width"]))))
-            item["height"] = max(18, min(image_height, _to_int(update.get("height"), int(field["height"]))))
-            item["font_size"] = max(8, min(220, _to_int(update.get("font_size"), int(field["font_size"]))))
+            if "x" in changed_properties:
+                item["x"] = max(0, min(image_width, _to_int(update.get("x"), int(field["x"]))))
+            if "y" in changed_properties:
+                item["y"] = max(0, min(image_height, _to_int(update.get("y"), int(field["y"]))))
+            if "width" in changed_properties:
+                item["width"] = max(24, min(image_width, _to_int(update.get("width"), int(field["width"]))))
+            if "height" in changed_properties:
+                item["height"] = max(18, min(image_height, _to_int(update.get("height"), int(field["height"]))))
+            if "font_size" in changed_properties:
+                item["font_size"] = max(8, min(220, _to_int(update.get("font_size"), int(field["font_size"]))))
             merged.append(item)
         else:
             merged.append(field)
     return normalize_fields(merged, image_width, image_height)
+
+
+def changed_dragged_fields(result: dict[str, Any] | None) -> list[dict[str, Any]]:
+    payload = result or {}
+    selected_id = str(payload.get("selected_id") or "")
+    changed_ids = {str(field_id) for field_id in payload.get("changed_ids") or [] if str(field_id)}
+    if not changed_ids and selected_id:
+        changed_ids = {selected_id}
+    changed_properties = payload.get("changed_properties") or {}
+    changed_fields = []
+    for field in payload.get("fields") or []:
+        field_id = str(field.get("id") or "")
+        if field_id not in changed_ids:
+            continue
+        item = deepcopy(field)
+        properties = changed_properties.get(field_id)
+        if isinstance(properties, list) and properties:
+            item["_changed_properties"] = [str(property_name) for property_name in properties]
+        changed_fields.append(item)
+    return changed_fields
 
 
 def _open_base_image(base_image: str | Path | bytes | BytesIO | Image.Image) -> Image.Image:

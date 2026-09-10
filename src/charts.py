@@ -150,6 +150,7 @@ def _draw_horizontal(chart: dict[str, Any], width: int, height: int) -> tuple[Im
         fill_w = int(bar_w * max(0.0, min(1.0, ratio)))
         if fill_w:
             draw.rounded_rectangle((bar_x, track_y, bar_x + fill_w, track_y + bar_h), radius=max(4, bar_h // 2), fill=row["color"])
+        records.append({"id": f"barra-{row['key']}", "x": bar_x, "y": track_y, "w": fill_w, "h": bar_h, "kind": "chart_bar", "origin": 0})
         if chart["show_values"]:
             draw_text_box(draw, row["display_value"], (bar_x + bar_w + 12, y, value_w, row_h), label_size + 2, 8, chart["value_color"], bold=True, align="right", record_id=f"chart-value-{row['key']}", records=records)
     return image, records
@@ -183,6 +184,7 @@ def _draw_vertical(chart: dict[str, Any], width: int, height: int) -> tuple[Imag
         y = baseline - col_h
         if col_h:
             draw.rounded_rectangle((x, y, x + col_w, baseline), radius=max(4, col_w // 5), fill=row["color"])
+        records.append({"id": f"coluna-{row['key']}", "x": x, "y": y, "w": col_w, "h": col_h, "kind": "chart_column", "origin": 0})
         label_size = max(9, min(chart["font_size"], 20))
         if chart["show_values"]:
             draw_text_box(draw, row["display_value"], (x - 12, max(top, y - value_h - 2), col_w + 24, value_h), label_size + 2, 8, chart["value_color"], bold=True, align="center", record_id=f"chart-value-{row['key']}", records=records)

@@ -26,6 +26,8 @@ class BindingResolution:
     filters_applied: dict[str, str]
     status: str = "ok"
     error: str = ""
+    period: str = ""
+    recorte: str = ""
 
 
 def normalize_key(value: Any) -> str:
@@ -107,6 +109,17 @@ def _format_resolved_value(raw_value: Any, definition: dict[str, Any] | None, de
     return formatted
 
 
+def _snapshot_column(dataframe: pd.DataFrame, column: str) -> str:
+    if not column:
+        return ""
+    values = []
+    for value in dataframe[column].tolist():
+        text = str(value).strip()
+        if text and text not in values:
+            values.append(text)
+    return " | ".join(values)
+
+
 def _apply_filters(dataframe: pd.DataFrame, filters: dict[str, Any] | None) -> pd.DataFrame:
     filtered = dataframe
     for column, expected in (filters or {}).items():
@@ -161,6 +174,8 @@ def resolve_indicator_value(
         unit=definition.get("unit", "") if definition else "",
         source_column=val_col,
         filters_applied=filters or {},
+        period=_snapshot_column(matched, columns["period"]),
+        recorte=_snapshot_column(matched, columns["recorte"]),
     )
 
 
@@ -230,6 +245,10 @@ def fields_from_dataset_observations(
                 "operation": "direct_value",
                 "filters": {},
                 "source_column": observation["source_column"],
+                "raw_value": str(observation["raw_value"]),
+                "display_value": observation["display_value"],
+                "period": observation["period"],
+                "recorte": observation["recorte"],
                 "version_policy": "notify_then_apply",
                 "status": "ok",
             },
@@ -253,6 +272,7 @@ def make_chart_element(
     image_height: int = 1402,
 ) -> dict[str, Any]:
     series = []
+    resolution_errors = []
     for index, indicator_id in enumerate(indicator_ids, start=1):
         resolved = resolve_indicator_value(dataframe, indicator_id, definitions)
         if resolved.status == "ok":
@@ -263,12 +283,15 @@ def make_chart_element(
             raw = ""
             display = "Sem dados"
             label = catalog_by_id(definitions).get(indicator_id, {}).get("label", indicator_id)
+            resolution_errors.append(f"{label}: {resolved.error or resolved.status}")
         series.append({
             "key": indicator_id,
             "indicator_id": indicator_id,
             "label": label,
             "raw_value": raw,
             "display_value": display,
+            "period": resolved.period if resolved.status == "ok" else "",
+            "recorte": resolved.recorte if resolved.status == "ok" else "",
             "order": index,
             "color": DEFAULT_COLOR,
         })
@@ -289,6 +312,7 @@ def make_chart_element(
         "render_label": False,
         "order": order,
         "type": "chart",
+        "category": "Gráficos",
         "binding": {
             "type": "chart_series",
             "dataset_id": dataset_id,
@@ -297,7 +321,8 @@ def make_chart_element(
             "indicator_ids": indicator_ids,
             "series_source": "indicators",
             "version_policy": "notify_then_apply",
-            "status": "ok",
+            "status": "invalid_series" if resolution_errors else "ok",
+            "error": "; ".join(resolution_errors),
         },
         "chart": {
             "type": chart_type,
@@ -311,7 +336,9 @@ def make_chart_element(
             "font_size": 26,
         },
     }
-    return normalize_fields([field], image_width, image_height)[0]
+    normalized = normalize_fields([field], image_width, image_height)[0]
+    normalized["order"] = max(1, int(order))
+    return normalized
 
 
 def dimension_chart_series(dataframe: pd.DataFrame, category_column: str, value_column_name: str, operation: str = "direct_value") -> tuple[list[dict[str, Any]], list[str]]:
@@ -390,6 +417,7 @@ def make_dimension_chart_element(
         "render_label": False,
         "order": order,
         "type": "chart",
+        "category": "Gráficos",
         "binding": {
             "type": "chart_dimension",
             "dataset_id": dataset_id,
@@ -415,7 +443,9 @@ def make_dimension_chart_element(
             "font_size": 26,
         },
     }
-    return normalize_fields([field], image_width, image_height)[0], errors
+    normalized = normalize_fields([field], image_width, image_height)[0]
+    normalized["order"] = max(1, int(order))
+    return normalized, errors
 
 
 def update_bound_elements(
@@ -442,6 +472,13 @@ def update_bound_elements(
                 str(binding.get("value_column") or ""),
                 str(binding.get("operation") or "direct_value"),
             )
+            if errors:
+                binding["status"] = "invalid_series"
+                binding["error"] = "; ".join(errors)
+                element["binding"] = binding
+                element["chart"] = chart
+                updated.append(element)
+                continue
             old = {str(item.get("key")): str(item.get("display_value") or "") for item in chart.get("series") or []}
             for item in series:
                 previous = old.get(str(item.get("key")))
@@ -450,8 +487,8 @@ def update_bound_elements(
             chart["series"] = series
             binding["applied_version_id"] = dataset_version_id
             binding["dataset_version_id"] = dataset_version_id
-            binding["status"] = "ok" if not errors else "invalid_series"
-            binding["error"] = "; ".join(errors)
+            binding["status"] = "ok"
+            binding.pop("error", None)
             element["binding"] = binding
             element["chart"] = chart
             updated.append(element)
@@ -459,6 +496,7 @@ def update_bound_elements(
         if binding.get("type") == "chart_series" or element.get("type") == "chart":
             chart = deepcopy(element.get("chart") or {})
             new_series = []
+            chart_errors = []
             for item in chart.get("series") or []:
                 indicator_id = str(item.get("indicator_id") or item.get("key") or "")
                 resolved = resolve_indicator_value(dataframe, indicator_id, definitions)
@@ -468,16 +506,22 @@ def update_bound_elements(
                     new_item["raw_value"] = resolved.raw_value
                     new_item["display_value"] = resolved.value
                     new_item["label"] = resolved.label
-                    binding["status"] = "ok"
+                    new_item["period"] = resolved.period
+                    new_item["recorte"] = resolved.recorte
                     if old_display != resolved.value:
                         changes.append({"element_id": element.get("id"), "indicator_id": indicator_id, "old": old_display, "new": resolved.value})
                 else:
-                    new_item["display_value"] = "Sem dados"
-                    binding["status"] = resolved.status
-                    binding["error"] = resolved.error
+                    chart_errors.append(f"{indicator_id}: {resolved.error or resolved.status}")
                 new_series.append(new_item)
             chart["series"] = new_series
-            binding["applied_version_id"] = dataset_version_id
+            if chart_errors:
+                binding["status"] = "missing_value" if all("sem dados" in error or "ausente" in error for error in chart_errors) else "invalid_series"
+                binding["error"] = "; ".join(chart_errors)
+            else:
+                binding["status"] = "ok"
+                binding["applied_version_id"] = dataset_version_id
+                binding["dataset_version_id"] = dataset_version_id
+                binding.pop("error", None)
             element["binding"] = binding
             element["chart"] = chart
             updated.append(element)
@@ -496,6 +540,10 @@ def update_bound_elements(
             binding["applied_version_id"] = dataset_version_id
             binding["dataset_version_id"] = dataset_version_id
             binding["status"] = "ok"
+            binding["raw_value"] = str(resolved.raw_value)
+            binding["display_value"] = resolved.value
+            binding["period"] = resolved.period
+            binding["recorte"] = resolved.recorte
             binding.pop("error", None)
             if old_value != resolved.value:
                 changes.append({"element_id": element.get("id"), "indicator_id": indicator_id, "old": old_value, "new": resolved.value})

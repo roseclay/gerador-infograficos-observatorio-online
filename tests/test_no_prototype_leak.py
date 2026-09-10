@@ -3,7 +3,7 @@ import ast
 
 
 ROOT = Path(__file__).resolve().parents[1]
-ALLOWED_PARTS = {".git", ".venv", ".pytest_cache", "__pycache__", "examples", "fixtures", "assets", "config", "output"}
+ALLOWED_PARTS = {".git", ".venv", ".pytest_cache", "__pycache__", "examples", "fixtures", "assets", "config", "output", "workspace"}
 ALLOWED_NAMES = {"dados_info01.csv"}
 TEXT_SUFFIXES = {".py", ".md", ".yaml", ".yml", ".txt", ".bat", ".csv", ".gitignore"}
 

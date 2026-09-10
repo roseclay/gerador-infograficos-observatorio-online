@@ -6,7 +6,9 @@ output/*
 !output/.gitkeep
 infografico_*.png
 storage/
+tmp/
+workspace/*
+!workspace/.gitkeep
 .streamlit/secrets.toml
-.streamlit/config.toml
 *.tmp
 *.bak

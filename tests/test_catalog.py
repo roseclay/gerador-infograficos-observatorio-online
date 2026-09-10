@@ -1,15 +1,16 @@
 from src.catalog import default_indicator_definitions, validate_indicator_definition
 
 
-def test_catalog_has_22_reusable_definitions_without_values():
+def test_catalog_has_23_reusable_definitions_without_values():
     definitions = default_indicator_definitions()
 
-    assert len(definitions) == 22
+    assert len(definitions) == 23
     assert {item["id"] for item in definitions} >= {
         "pesquisadores_ativos",
         "producao_tecnica_total",
         "bolsistas_pq",
         "bolsistas_dt",
+        "municipios_pesquisadores_atuando",
     }
     assert all("value" not in item and "valor" not in item for item in definitions)
     assert all(validate_indicator_definition(item) == [] for item in definitions)

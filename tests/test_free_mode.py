@@ -8,6 +8,7 @@ from PIL import Image
 from src.free_mode import (
     build_free_mode_config,
     build_free_mode_config_with_name,
+    changed_dragged_fields,
     fields_from_dataframe,
     fields_to_dataframe,
     free_mode_export_names,
@@ -177,6 +178,62 @@ def test_named_config_and_drag_merge_update_coordinates():
 
     assert config["name"] == "Indicadores ciência"
     assert merged[0]["x"] == 250
+    assert merged[0]["y"] == 120
+    assert merged[0]["width"] == 180
+    assert merged[0]["height"] == 80
+    assert merged[0]["font_size"] == 72
+
+
+def test_drag_merge_changes_only_the_field_reported_by_the_canvas():
+    first = {**new_text_field(order=1, image_width=500, image_height=300), "id": "campo_001", "font_size": 57}
+    second = {**new_text_field(["campo_001"], order=2, image_width=500, image_height=300), "id": "campo_002", "font_size": 68}
+
+    browser_result = {
+        "selected_id": "campo_002",
+        "changed_ids": ["campo_002"],
+        "fields": [
+            {"id": "campo_001", "font_size": 68},
+            {"id": "campo_002", "x": 210, "y": 120, "width": 180, "height": 80, "font_size": 64},
+        ],
+    }
+    merged = merge_dragged_fields(
+        [first, second],
+        changed_dragged_fields(browser_result),
+        500,
+        300,
+    )
+
+    assert merged[0]["font_size"] == 57
+    assert merged[1]["font_size"] == 64
+
+
+def test_moving_a_field_never_imports_a_stale_font_size_or_dimensions():
+    field = {
+        **new_text_field(order=1, image_width=500, image_height=300),
+        "id": "campo_002",
+        "x": 40,
+        "y": 50,
+        "width": 180,
+        "height": 80,
+        "font_size": 72,
+    }
+    browser_result = {
+        "selected_id": "campo_002",
+        "changed_ids": ["campo_002"],
+        "changed_properties": {"campo_002": ["x", "y"]},
+        "fields": [
+            {"id": "campo_002", "x": 210, "y": 120, "width": 24, "height": 18, "font_size": 8},
+        ],
+    }
+
+    merged = merge_dragged_fields(
+        [field],
+        changed_dragged_fields(browser_result),
+        500,
+        300,
+    )
+
+    assert merged[0]["x"] == 210
     assert merged[0]["y"] == 120
     assert merged[0]["width"] == 180
     assert merged[0]["height"] == 80

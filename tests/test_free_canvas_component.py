@@ -12,8 +12,10 @@ def test_free_canvas_component_assets_are_packaged():
     assert "streamlit:setComponentValue" in text
     assert "pointermove" in text
     assert "nwse-resize" in text
-    assert "Campos do CSV" in text
+    assert "Campos disponíveis" in text
+    assert "Buscar campo disponível" in text
     assert "startPalettePointer" in text
+    assert "@media (max-width: 680px)" in text
 
 
 def test_drag_updates_field_without_redrawing_the_canvas():
@@ -34,12 +36,24 @@ def test_canvas_component_reports_field_placement():
     assert "scrollMemory" in text
 
 
+def test_canvas_only_draws_editing_handles_for_the_selected_field():
+    text = (COMPONENT_DIR / "index.html").read_text(encoding="utf-8")
+
+    assert "border: 1px solid transparent;" in text
+    assert ".field.selected .handle" in text
+    assert "display: none;" in text
+    assert ".field:hover," not in text
+    assert 'selectField("");' in text
+    assert 'selectedId = fields[0]' not in text
+
+
 def test_canvas_component_preserves_local_drop_until_streamlit_catches_up():
     text = (COMPONENT_DIR / "index.html").read_text(encoding="utf-8")
 
     assert "pendingLocalValue" in text
-    assert "pendingLocalRenders" in text
     assert "mergePendingLocalFields" in text
+    assert "pendingIds.has" in text
+    assert "pendingLocalValue.changed_ids" in text
     assert "font_size:" in text
     assert "originalFontSize" in text
     assert "faithfulPreview" in text
@@ -56,6 +70,16 @@ def test_canvas_component_preserves_local_drop_until_streamlit_catches_up():
     assert "event.shiftKey ? 10 : 1" in text
     assert "Backspace" in text
     assert "scheduleComponentValue" in text
+    assert "changedFieldIds" in text
+    assert "changed_ids: Array.from(changedFieldIds)" in text
+    assert "changedFieldProperties" in text
+    assert "changed_properties: Object.fromEntries" in text
+    assert 'changedMode === "resize" ? ["width", "height", "font_size"] : ["x", "y"]' in text
+    assert "pendingLocalRenders" not in text
+    assert "Campo e posição" in text
+    assert "Situação" in text
+    assert "field-meta" in text
+    assert 'Math.max(1, field.font_size * scale)' in text
 
 
 def test_drag_canvas_uses_renderer_preview_when_provided(monkeypatch):
@@ -77,6 +101,7 @@ def test_drag_canvas_uses_renderer_preview_when_provided(monkeypatch):
     )
 
     assert result["fields"][0]["font_size"] == 50
+    assert result["changed_ids"] == []
     assert calls[0]["faithfulPreview"] is True
     assert calls[0]["image"] == calls[0]["baseImage"]
     assert "campo_001" in calls[0]["fieldPreviews"]

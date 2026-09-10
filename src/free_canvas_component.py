@@ -45,6 +45,8 @@ def drag_canvas(
     default = {
         "changed": False,
         "selected_id": "",
+        "changed_ids": [],
+        "changed_properties": {},
         "fields": [
             {
                 "id": str(field.get("id") or ""),
