@@ -1493,7 +1493,7 @@ def cancel_local_delete() -> None:
 
 def render_local_home() -> None:
     workspace = local_workspace()
-    brand = asset_data_uri(ROOT / "assets" / "logo_observatorio.jpeg")
+    brand = asset_data_uri(ROOT / "assets" / "logo_observatorio.png")
     st.markdown('<div class="home-screen-marker"></div>', unsafe_allow_html=True)
     st.markdown(
         f"""
@@ -2232,7 +2232,7 @@ with editor_col:
     template_config = render_template_selector(config.get("template") or {})
 
     assets = {
-        "observatorio_logo": ROOT / "assets" / "logo_observatorio.jpeg",
+        "observatorio_logo": ROOT / "assets" / "logo_observatorio.png",
         "bahia_logo": ROOT / "assets" / "logo_estado_bahia.jpeg",
     }
 
@@ -2305,7 +2305,7 @@ with editor_col:
 
 with preview_col:
     assets = {
-        "observatorio_logo": ROOT / "assets" / "logo_observatorio.jpeg",
+        "observatorio_logo": ROOT / "assets" / "logo_observatorio.png",
         "bahia_logo": ROOT / "assets" / "logo_estado_bahia.jpeg",
     }
     report, multipage = maybe_render_preview(valid_metrics, metadata, assets, max_per_page, current_config)
