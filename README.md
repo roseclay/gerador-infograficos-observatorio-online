@@ -41,6 +41,26 @@ streamlit run app.py
 
 Abra o endereco informado pelo Streamlit, normalmente `http://localhost:8501`.
 
+## Rodar com Docker
+
+Para servidores do Observatorio ou maquinas que ja tenham Docker instalado:
+
+```bash
+docker build -t gerador-infograficos-observatorio .
+docker run --rm -p 8501:8501 \
+  -v "$(pwd)/workspace:/app/workspace" \
+  -v "$(pwd)/output:/app/output" \
+  gerador-infograficos-observatorio
+```
+
+Com Docker Compose:
+
+```bash
+docker compose up --build -d
+```
+
+Depois acesse `http://localhost:8501`. Em um servidor publico, a equipe de infraestrutura pode apontar um proxy ou subcaminho institucional para a porta `8501`.
+
 ## Fluxo recomendado
 
 1. Na tela inicial, clique em **Novo**.
