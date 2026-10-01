@@ -59,7 +59,32 @@ Com Docker Compose:
 docker compose up --build -d
 ```
 
-Depois acesse `http://localhost:8501`. Em um servidor publico, a equipe de infraestrutura pode apontar um proxy ou subcaminho institucional para a porta `8501`.
+O `docker-compose.yml` esta preparado para uso atras de Nginx em `/gerador-infografico/`, com a porta `8501` exposta apenas em `127.0.0.1`.
+
+Exemplo de Nginx:
+
+```nginx
+location = /gerador-infografico {
+    return 301 /gerador-infografico/;
+}
+
+location /gerador-infografico/ {
+    proxy_pass http://127.0.0.1:8501;
+    proxy_http_version 1.1;
+
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+
+    proxy_read_timeout 86400;
+}
+```
+
+Para rodar na raiz de um dominio ou subdominio, remova `STREAMLIT_SERVER_BASE_URL_PATH` do `docker-compose.yml` e aponte o proxy para `/`.
 
 ## Fluxo recomendado
 
