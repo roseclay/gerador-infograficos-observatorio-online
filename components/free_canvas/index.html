@@ -144,8 +144,8 @@
       padding: 0;
     }
 
-    .field.has-render .field-value,
-    .field.has-render .field-name {
+    .field.has-render.render-ready .field-value,
+    .field.has-render.render-ready .field-name {
       inset: 0;
       pointer-events: none;
       position: absolute;
@@ -153,11 +153,15 @@
     }
 
     .field-render {
-      display: block;
+      display: none;
       height: 100%;
       object-fit: fill;
       pointer-events: none;
       width: 100%;
+    }
+
+    .field.render-ready .field-render {
+      display: block;
     }
 
     .field-value {
@@ -625,6 +629,23 @@
       return previews[String(field.id || "")] || "";
     }
 
+    function attachRenderPreview(element, rendered) {
+      const markReady = () => {
+        if (rendered.naturalWidth > 0 && rendered.naturalHeight > 0) {
+          element.classList.add("render-ready");
+        }
+      };
+      const markFallback = () => {
+        element.classList.remove("has-render", "render-ready");
+        rendered.remove();
+      };
+      rendered.addEventListener("load", markReady, { once: true });
+      rendered.addEventListener("error", markFallback, { once: true });
+      if (rendered.complete) {
+        markReady();
+      }
+    }
+
     function updateFieldElement(field) {
       let element = document.querySelector(`.field[data-id="${CSS.escape(field.id)}"]`);
       if (!field.enabled || !field.placed) {
@@ -643,14 +664,19 @@
       applyFieldStyle(element, field);
       const previewSrc = fieldPreviewSrc(field);
       element.classList.toggle("has-render", Boolean(previewSrc));
+      if (!previewSrc) {
+        element.classList.remove("render-ready");
+      }
       let rendered = element.querySelector(".field-render");
       if (previewSrc && !rendered) {
         rendered = document.createElement("img");
         rendered.className = "field-render";
         rendered.alt = "";
         element.insertBefore(rendered, element.firstChild);
+        attachRenderPreview(element, rendered);
       }
       if (rendered && previewSrc && rendered.getAttribute("src") !== previewSrc) {
+        element.classList.remove("render-ready");
         rendered.setAttribute("src", previewSrc);
       }
       if (rendered && !previewSrc) {
@@ -730,6 +756,7 @@
         rendered.className = "field-render";
         rendered.alt = "";
         rendered.src = previewSrc;
+        attachRenderPreview(box, rendered);
         box.appendChild(rendered);
       }
 

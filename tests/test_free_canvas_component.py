@@ -63,6 +63,9 @@ def test_canvas_component_preserves_local_drop_until_streamlit_catches_up():
     assert "stage.dataset.ready" in text
     assert "fieldPreviewSrc" in text
     assert "field-render" in text
+    assert "render-ready" in text
+    assert "attachRenderPreview" in text
+    assert 'element.classList.remove("has-render", "render-ready")' in text
     assert "removeFieldFromCanvas" in text
     assert "Remover da arte" in text
     assert "onKeyDown" in text
