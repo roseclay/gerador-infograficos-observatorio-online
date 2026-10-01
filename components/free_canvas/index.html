@@ -625,6 +625,9 @@
     }
 
     function fieldPreviewSrc(field) {
+      if (String(field.type || "metric") !== "chart") {
+        return "";
+      }
       const previews = args.fieldPreviews || {};
       return previews[String(field.id || "")] || "";
     }

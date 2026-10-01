@@ -62,6 +62,7 @@ def test_canvas_component_preserves_local_drop_until_streamlit_catches_up():
     assert "updatePreviewImage" in text
     assert "stage.dataset.ready" in text
     assert "fieldPreviewSrc" in text
+    assert 'String(field.type || "metric") !== "chart"' in text
     assert "field-render" in text
     assert "render-ready" in text
     assert "attachRenderPreview" in text
